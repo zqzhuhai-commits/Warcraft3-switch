@@ -1,20 +1,10 @@
 {
-  "nspSize": 5953240,
-  "sha256": "3ce4a16184073108812119392666731a7c1151d934bdfebb556e38bfb17a1939",
+  "nspSize": 7135448,
+  "sha256": "ed6b3fc92781882659e46353e8f23e775ce0b42e6b58467ce0b059f6202d1ce9",
   "containerEntries": [
     {
-      "file": "c8433078ec5b2e97ffec9492eef227fc.cnmt.nca",
-      "size": 4096,
-      "hashChecks": [
-        "Superblock Hash (GOOD)",
-        "Hash Table (GOOD)"
-      ],
-      "hashFailures": [],
-      "toolExit": 0
-    },
-    {
-      "file": "6ca24265d32e92edc0912bbd83077f19.nca",
-      "size": 363520,
+      "file": "e48d947b8e22514e6df04032f9c524df.nca",
+      "size": 1543168,
       "hashChecks": [
         "Superblock Hash (GOOD)"
       ],
@@ -22,8 +12,8 @@
       "toolExit": 0
     },
     {
-      "file": "e0abc32862f3f5643b6823745b70bcb2.nca",
-      "size": 5585408,
+      "file": "beb055323b2d0396a5895742265cf5ac.nca",
+      "size": 5587968,
       "hashChecks": [
         "Superblock Hash (GOOD)",
         "Hash Table (GOOD)",
@@ -31,8 +21,37 @@
       ],
       "hashFailures": [],
       "toolExit": 0
+    },
+    {
+      "file": "71b447278e88f081254535c587bc25d4.cnmt.nca",
+      "size": 4096,
+      "hashChecks": [
+        "Superblock Hash (GOOD)",
+        "Hash Table (GOOD)"
+      ],
+      "hashFailures": [],
+      "toolExit": 0
     }
   ],
   "hardwareTested": false,
-  "retailDataIncluded": false
+  "retailDataIncluded": false,
+  "nsoSegments": [
+    ".text   (GOOD):             00000000-00635000",
+    ".rodata (GOOD):             00635000-00819000",
+    ".rwdata (GOOD):             00819000-008b4338"
+  ],
+  "packagedLanguageIcons": 17,
+  "inputAdapterTests": "controller ownership, tap, coordinate scale/clamp, drag, long press, two fingers, finger identity, duplicate filtering, missing samples, cancellation, mixed sources",
+  "nativeSuite": {
+    "reports": 33,
+    "tests": 6949,
+    "assertions": 343231,
+    "failures": 0,
+    "errors": 0
+  },
+  "touchSourceSha256": {
+    "port/switch/platform.c": "5c74143c197e6887cdc45bb228b616905013c5fb27e336eed4c696a968a3f32c",
+    "port/switch/touch.c": "de9ca019c039da59967720a420c6edb9a437dbd1d86c9b1e636c0fac507fe88d",
+    "port/switch/touch.h": "99e55899c4b5c38346e0c469ea0af6a49f6f8b1946aaca10f75ed84274036d42"
+  }
 }

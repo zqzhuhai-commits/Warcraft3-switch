@@ -1,8 +1,17 @@
 #ifndef TEST_SWITCH_H
 #define TEST_SWITCH_H
 #include <stdint.h>
+#include <stddef.h>
 #include <stdbool.h>
 typedef uint64_t u64;
+typedef struct { unsigned finger_id,x,y; } HidTouchState;
+typedef struct { int count; HidTouchState touches[16]; } HidTouchScreenState;
+extern HidTouchScreenState test_touch;
+extern bool test_touch_available;
+static inline void hidInitializeTouchScreen(void) {}
+static inline size_t hidGetTouchScreenStates(HidTouchScreenState *s,size_t n) {
+    (void)n;if(!test_touch_available)return 0;*s=test_touch;return 1;
+}
 typedef struct { int unused; } PadState;
 typedef struct { int x,y; } HidAnalogStickState;
 enum {HidNpadButton_A=1ULL<<0,HidNpadButton_B=1ULL<<1,HidNpadButton_X=1ULL<<2,HidNpadButton_Y=1ULL<<3,
@@ -23,6 +32,7 @@ static inline void padInitializeDefault(PadState *p){(void)p;}
 static inline int appletGetAppletType(void){return AppletType_Application;}
 static inline int romfsInit(void){return 0;}
 static inline void romfsExit(void){}
+static inline void randomGet(void *p,size_t n){(void)p;(void)n;}
 static inline void consoleInit(void *p){(void)p;}
 static inline void consoleExit(void *p){(void)p;}
 static inline void consoleUpdate(void *p){(void)p;}

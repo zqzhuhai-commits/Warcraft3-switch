@@ -74,7 +74,8 @@ single-player; network availability is not certified by this port.
 | D-pad up/down | Zoom |
 | D-pad left/right | Subgroup / quick camera |
 | Left stick click / right stick click | Quick save / engine screenshot |
-| Touchscreen | Existing SDL touch input |
+| Touch tap / one-finger slide | Left click / left-button drag |
+| Stationary hold 500 ms / two-finger touch | Right click / smart order |
 
 A and ZR are merged into one logical left button, so releasing one while the
 other is held does not end a drag. Stick camera keys emit transitions only,
@@ -86,7 +87,32 @@ mouse events, using existing shift-order logic.
 `port/switch/tests/input.c` drives the production input adapter through SDL's real
 event queue with simulated libnx pad samples. It covers drag ownership, right
 click/Shift, camera press/release, menu press/release and application exit.
-It does not emulate Horizon, graphics, real Joy-Con hardware, or touchscreen.
+`port/switch/tests/touch.c` supplies simulated HID touch samples and deterministic
+time to the production adapter through the same SDL queue. Run both with:
+
+```sh
+sh port/switch/tests/run-input.sh
+```
+
+`touch.c` explicitly initializes and samples libnx touchscreen HID: the original
+pad-only port relied on SDL synthesis, which failed on the user's console.
+Screen coordinates (1280x720) scale into the SDL window and clamp to its bounds.
+A tap defers left down/up until release; movement over 8 logical pixels starts a
+left drag at the original point. A stationary 500 ms hold or second finger starts
+right down without first issuing a left click. Right ownership lasts until all
+fingers lift. Finger IDs survive sample-array reorder. Missing samples retain
+state; a zero-contact sample or loss of the focused window releases held touch
+buttons. Touch and pad buttons share ownership, preventing premature releases.
+
+The adapter disables SDL touch/mouse synthesis and filters raw finger/native
+synthetic mouse events, then marks its own mouse events as SDL_TOUCH_MOUSEID.
+This avoids duplicate clicks and the client's unrelated two-finger camera-pan
+path, and disables edge scrolling under a resting finger. The adapter also
+hands the last touch position to the stick cursor. No gameplay logic or shared
+client touch behavior changes.
+
+These tests do not emulate Horizon, graphics or physical touchscreen hardware;
+the new build still needs a console retest.
 
 The next hardware acceptance is: install/launch, read MPQs, render menu, load a
 small map, select/drag/issue orders, hear audio, save/reload, exit/relaunch and

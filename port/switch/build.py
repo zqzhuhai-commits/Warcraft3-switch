@@ -65,6 +65,7 @@ if a.host:
 else:
  # Isolate libnx headers from the engine's legacy aliases.
  objects.append(compile('platform',[ROOT/'port/switch/platform.c']))
+ objects.append(compile('touch',[ROOT/'port/switch/touch.c']))
  objects.append(compile('filesystem',[ROOT/'port/switch/fs.c']))
  run([cc,'-fPIE','-specs='+str(dkp/'libnx/switch.specs'),'-march=armv8-a+crc+crypto','-mtp=soft',*objects,
   '-Wl,--gc-sections','-Wl,-Map,'+str(out/'openrealm.map'),
@@ -72,7 +73,7 @@ else:
  tools=dkp/'tools/bin'
  romfs=out/'romfs';shutil.copytree(ROOT/'share',romfs/'share',dirs_exist_ok=True)
  shutil.copytree(ROOT/wc3/'share',romfs/'share/warcraft-3',dirs_exist_ok=True)
- run([tools/'nacptool','--create','OpenRealm - Warcraft III','OpenRealm contributors','0.1.0',out/'control.nacp','--titleid=0100F34C524D0000'])
+ run([tools/'nacptool','--create','OpenRealm - Warcraft III','OpenRealm contributors','0.1.1',out/'control.nacp','--titleid=0100F34C524D0000'])
  run([tools/'elf2nro',out/'openrealm.elf',out/'openrealm.nro','--nacp='+str(out/'control.nacp'),'--icon='+str(ROOT/'port/switch/icon.jpg'),'--romfsdir='+str(romfs)])
  package=out/'package'
  (package/'exefs').mkdir(parents=True,exist_ok=True);(package/'control').mkdir(exist_ok=True)

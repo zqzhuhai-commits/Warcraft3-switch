@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "platform.h"
+#include "touch.h"
 
 #define NX_DEADZONE 6000 // stick units; suppress drift on Joy-Con analog axes
 #define NX_CURSOR_SPEED 800.0f // pixels per second at full stick; 720p RTS pointer speed
@@ -19,6 +20,10 @@
 
 static PadState pad;
 static float cursor_x = 640, cursor_y = 360;
+static bool pointer_from_touch;
+void NX_TouchPointer(int x,int y) {
+    cursor_x=x;cursor_y=y;pointer_from_touch=true;
+}
 static Uint32 previous;
 static u64 last_buttons;
 static bool cam_keys[4];
@@ -36,20 +41,29 @@ static void NX_Key(SDL_Keycode key, bool down, SDL_Keymod mods) {
     SDL_PushEvent(&ev);
 }
 
-static void NX_Mouse(int button, bool down) {
-    SDL_Event ev = {0};
-    ev.type = down ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
-    ev.button.timestamp = SDL_GetTicks();
-    ev.button.button = button;
-    ev.button.state = down ? SDL_PRESSED : SDL_RELEASED;
-    ev.button.clicks = 1;
-    ev.button.x = (int)cursor_x; ev.button.y = (int)cursor_y;
+/* Merge controller and touchscreen ownership: either may keep a drag held. */
+static unsigned mouse_sources[8];
+void NX_MouseSource(unsigned source,int button,bool down,int x,int y) {
+    if(source>1 || button<=0 || button>=8) return;
+    unsigned before=mouse_sources[button],bit=1u<<source;
+    if(down) mouse_sources[button]|=bit; else mouse_sources[button]&=~bit;
+    if((before!=0)==(mouse_sources[button]!=0)) return;
+    SDL_Event ev={0};
+    ev.type=down ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
+    ev.button.timestamp=SDL_GetTicks();
+    ev.button.which=source==1 ? NX_TOUCH_MOUSEID : 0;
+    ev.button.button=button;ev.button.state=down ? SDL_PRESSED : SDL_RELEASED;
+    ev.button.clicks=1;ev.button.x=x;ev.button.y=y;
     SDL_PushEvent(&ev);
+}
+static void NX_Mouse(int button,bool down) {
+    NX_MouseSource(0,button,down,(int)cursor_x,(int)cursor_y);
 }
 
 /* Sample once before the engine drains events. Button releases retain press bindings. */
 void NX_PumpInput(void) {
     if (!appletMainLoop()) {
+        NX_TouchCancel();
         SDL_Event ev = {.type = SDL_QUIT}; SDL_PushEvent(&ev); return;
     }
     padUpdate(&pad);
@@ -63,13 +77,16 @@ void NX_PumpInput(void) {
     SDL_Window *win = SDL_GetKeyboardFocus();
     if (win) {
         int w, h, mx, my; SDL_GetWindowSize(win, &w, &h); SDL_GetMouseState(&mx, &my);
-        cursor_x = mx; cursor_y = my;
+        if(!pointer_from_touch) {cursor_x = mx; cursor_y = my;}
         float speed = NX_CURSOR_SPEED * dt * ((held & HidNpadButton_L) ? NX_PRECISE_SCALE : 1.0f);
         float x = abs(left.x) > NX_DEADZONE ? (float)left.x / 32767 : 0;
         float y = abs(left.y) > NX_DEADZONE ? (float)left.y / 32767 : 0;
         cursor_x = fmaxf(0, fminf(w - 1, cursor_x + x * speed));
         cursor_y = fmaxf(0, fminf(h - 1, cursor_y - y * speed));
-        if (x || y) SDL_WarpMouseInWindow(win, (int)cursor_x, (int)cursor_y);
+        if (x || y) {
+            SDL_WarpMouseInWindow(win, (int)cursor_x, (int)cursor_y);
+            pointer_from_touch=false;
+        }
     }
     /* A/ZR share one logical left button; releasing either cannot release the other. */
     bool lnow = (held & (HidNpadButton_A | HidNpadButton_ZR)) != 0;
@@ -91,6 +108,10 @@ void NX_PumpInput(void) {
         if (next[i] != cam_keys[i]) NX_Key(arrows[i], next[i], KMOD_NONE);
         cam_keys[i] = next[i];
     }
+    if(win) {
+        int w,h;SDL_GetWindowSize(win,&w,&h);
+        NX_TouchFrame(win,now,w,h);
+    } else NX_TouchCancel();
     last_buttons = held;
 }
 
@@ -147,5 +168,6 @@ int main(int argc, char **argv) {
     char *video[] = {"+set","com_maxfps","30","+set","r_vsync","1","+set","vid_native","0","+set","vid_mode","4"};
     for (unsigned i = 0; i < sizeof(video)/sizeof(video[0]); i++) args[count++] = video[i];
     args[count] = NULL;
+    NX_InitInput();
     return OpenRealm_Main(count,args);
 }

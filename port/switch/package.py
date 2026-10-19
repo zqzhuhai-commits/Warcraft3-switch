@@ -27,7 +27,7 @@ with tempfile.TemporaryDirectory(prefix='openrealm-nsp-') as tmp:
     files = list((temp/'nsp').glob('*.nsp'))
     if result.returncode or len(files) != 1:
         raise SystemExit('Packaging failed. Check local tools/keyset; tool output is withheld to protect key material.')
-    target = a.out/'OpenRealm-Switch-0.1.0-preview.nsp'
+    target = a.out/'OpenRealm-Switch-0.1.1-preview.nsp'
     shutil.copyfile(files[0], target)
     print(str(target))
     print('SHA256:', hashlib.sha256(target.read_bytes()).hexdigest())

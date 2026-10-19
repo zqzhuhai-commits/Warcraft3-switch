@@ -1,11 +1,15 @@
-# OpenRealm Switch 0.1.0 Preview
+# OpenRealm Switch 0.1.1 Preview
 
-首个 Switch 原生移植测试包，包含完整应用 NSP 和备用 NRO。
+修复 Switch 触屏不能操作：新增直接读取 libnx 触屏并转换为 SDL 鼠标事件的适配器。
 
-**尚未通过 Switch 实机验证。编译/文件完整性检查通过，不等于已经实机可玩。**
+- 点按：鼠标左键。
+- 单指滑动：按住左键拖动，可框选单位。
+- 原地长按 0.5 秒或双指触碰：鼠标右键，用于移动、攻击等智能指令。
+- 合并触屏和手柄的按键状态，避免同时操作时提前松开拖动。
+- 更换为新制作的《魔兽争霸 III：冰封王座》主题图标，更新 NSP 和 NRO。
 
-将自行提供的 Classic MPQ 资源放到 `sd:/switch/openrealm/data/`。
-存档与配置在 `sd:/switch/openrealm/user/`，日志在 `sd:/switch/openrealm/openrealm.log`。
+通过手柄及触屏模拟输入测试、Switch 交叉编译、NSP/NCA 哈希和图标检查。
+尚待 Switch 实机复测触屏操作。
 
-普通音效/语音代码已编入；FFmpeg 影片和相关音乐功能暂未启用。
-安装步骤、按键和限制见仓库 README。所有下载均不包含 MPQ 游戏数据和密钥。
+原有资源路径 `sd:/switch/openrealm/data/` 和存档路径保持不变。
+安装包不包含原版 MPQ 游戏资源。网络协议和存档格式未变。

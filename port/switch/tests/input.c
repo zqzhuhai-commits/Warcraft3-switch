@@ -3,6 +3,8 @@
 #include <assert.h>
 #include <stdio.h>
 #include "../platform.h"
+HidTouchScreenState test_touch;
+bool test_touch_available=true;
 u64 test_buttons;
 HidAnalogStickState test_sticks[2];
 bool test_running = true;
