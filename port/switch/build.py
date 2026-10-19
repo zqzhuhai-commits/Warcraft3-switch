@@ -73,7 +73,12 @@ else:
  tools=dkp/'tools/bin'
  romfs=out/'romfs';shutil.copytree(ROOT/'share',romfs/'share',dirs_exist_ok=True)
  shutil.copytree(ROOT/wc3/'share',romfs/'share/warcraft-3',dirs_exist_ok=True)
- run([tools/'nacptool','--create','OpenRealm - Warcraft III','OpenRealm contributors','0.1.1',out/'control.nacp','--titleid=0100F34C524D0000'])
+ run([tools/'nacptool','--create','魔兽争霸3冰封王座','小帆','0.1.2',out/'control.nacp','--titleid=0100F34C524D0000'])
+ # Older nacptool versions fill only the first 12 language records.
+ nacp=out/'control.nacp';metadata=bytearray(nacp.read_bytes())
+ for language in range(16):metadata[language*0x300:(language+1)*0x300]=metadata[:0x300]
+ metadata[0x302c:0x3030]=(0xffff).to_bytes(4,'little')
+ nacp.write_bytes(metadata)
  run([tools/'elf2nro',out/'openrealm.elf',out/'openrealm.nro','--nacp='+str(out/'control.nacp'),'--icon='+str(ROOT/'port/switch/icon.jpg'),'--romfsdir='+str(romfs)])
  package=out/'package'
  (package/'exefs').mkdir(parents=True,exist_ok=True);(package/'control').mkdir(exist_ok=True)

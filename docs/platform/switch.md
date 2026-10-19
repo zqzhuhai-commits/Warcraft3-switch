@@ -5,6 +5,11 @@ libnx, SDL2 and switch-mesa. It is an experimental build: compilation and host
 checks do not establish Switch gameplay, graphics performance or save reliability.
 The upstream revision is `8853d069c21c94a981121066e1d78e967676fae4`.
 
+The application NACP title is `魔兽争霸3冰封王座`, publisher/author `小帆`.
+These are display metadata; the upstream MIT attribution remains in source.
+The build fills all 16 NACP language records and enables their language mask,
+because older nacptool versions initialize only 12 records.
+
 ## Build and layout
 
 Install devkitA64, libnx, switch-tools, switch-sdl2, switch-mesa and switch-zlib

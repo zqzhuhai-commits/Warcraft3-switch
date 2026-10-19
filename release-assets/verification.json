@@ -1,9 +1,9 @@
 {
   "nspSize": 7135448,
-  "sha256": "ed6b3fc92781882659e46353e8f23e775ce0b42e6b58467ce0b059f6202d1ce9",
+  "sha256": "133e65f5906b1b2190c1486c2f1feef474295bc08051ab1e76f34844c371e7b6",
   "containerEntries": [
     {
-      "file": "e48d947b8e22514e6df04032f9c524df.nca",
+      "file": "5026dd514956c83337715c23b3095881.nca",
       "size": 1543168,
       "hashChecks": [
         "Superblock Hash (GOOD)"
@@ -12,7 +12,7 @@
       "toolExit": 0
     },
     {
-      "file": "beb055323b2d0396a5895742265cf5ac.nca",
+      "file": "ef6f3a538e9075a38d26ed38076e5e4a.nca",
       "size": 5587968,
       "hashChecks": [
         "Superblock Hash (GOOD)",
@@ -23,7 +23,7 @@
       "toolExit": 0
     },
     {
-      "file": "71b447278e88f081254535c587bc25d4.cnmt.nca",
+      "file": "2c2ccea4dd4aa3cc69763cbf0d347acb.cnmt.nca",
       "size": 4096,
       "hashChecks": [
         "Superblock Hash (GOOD)",
@@ -35,23 +35,11 @@
   ],
   "hardwareTested": false,
   "retailDataIncluded": false,
-  "nsoSegments": [
-    ".text   (GOOD):             00000000-00635000",
-    ".rodata (GOOD):             00635000-00819000",
-    ".rwdata (GOOD):             00819000-008b4338"
-  ],
-  "packagedLanguageIcons": 17,
-  "inputAdapterTests": "controller ownership, tap, coordinate scale/clamp, drag, long press, two fingers, finger identity, duplicate filtering, missing samples, cancellation, mixed sources",
-  "nativeSuite": {
-    "reports": 33,
-    "tests": 6949,
-    "assertions": 343231,
-    "failures": 0,
-    "errors": 0
-  },
-  "touchSourceSha256": {
-    "port/switch/platform.c": "5c74143c197e6887cdc45bb228b616905013c5fb27e336eed4c696a968a3f32c",
-    "port/switch/touch.c": "de9ca019c039da59967720a420c6edb9a437dbd1d86c9b1e636c0fac507fe88d",
-    "port/switch/touch.h": "99e55899c4b5c38346e0c469ea0af6a49f6f8b1946aaca10f75ed84274036d42"
-  }
+  "displayName": "魔兽争霸3冰封王座",
+  "author": "小帆",
+  "version": "0.1.2",
+  "verifiedLanguageRecords": 16,
+  "nroMetadataMatchesNsp": true,
+  "executableUnchangedFrom": "0.1.1-preview",
+  "packagedLanguageIcons": 17
 }

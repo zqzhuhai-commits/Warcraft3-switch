@@ -2,6 +2,8 @@
 
 《魔兽争霸 III》OpenRealm 引擎的 Nintendo Switch 原生移植测试版。
 
+应用显示名称：**魔兽争霸3冰封王座**；移植版显示作者：**小帆**。
+
 **状态：已完成 Switch 交叉编译并生成 NSP/NRO。尚未通过 Switch 实机验证，不能视为稳定可玩版本。**
 
 基于 [corepunch/open-realm](https://github.com/corepunch/open-realm)，固定上游提交
@@ -10,7 +12,7 @@
 ## 下载与安装
 
 从本仓库的 [Releases](https://github.com/zqzhuhai-commits/Warcraft3-switch/releases)
-下载 `OpenRealm-Switch-0.1.1-preview.nsp`。这是包含原生引擎的完整应用包，不是 NRO 前端。
+下载 `OpenRealm-Switch-0.1.2-preview.nsp`。这是包含原生引擎的完整应用包，不是 NRO 前端。
 也提供 NRO 作为备用运行方式；NRO 需使用完整应用内存模式，不支持相册 Applet 模式。
 
 1. 将你拥有的 **Warcraft III Classic 的 MPQ 文件**放到 SD 卡目录：
