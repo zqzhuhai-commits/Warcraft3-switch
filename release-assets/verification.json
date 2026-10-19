@@ -1,0 +1,38 @@
+{
+  "nspSize": 5953240,
+  "sha256": "3ce4a16184073108812119392666731a7c1151d934bdfebb556e38bfb17a1939",
+  "containerEntries": [
+    {
+      "file": "c8433078ec5b2e97ffec9492eef227fc.cnmt.nca",
+      "size": 4096,
+      "hashChecks": [
+        "Superblock Hash (GOOD)",
+        "Hash Table (GOOD)"
+      ],
+      "hashFailures": [],
+      "toolExit": 0
+    },
+    {
+      "file": "6ca24265d32e92edc0912bbd83077f19.nca",
+      "size": 363520,
+      "hashChecks": [
+        "Superblock Hash (GOOD)"
+      ],
+      "hashFailures": [],
+      "toolExit": 0
+    },
+    {
+      "file": "e0abc32862f3f5643b6823745b70bcb2.nca",
+      "size": 5585408,
+      "hashChecks": [
+        "Superblock Hash (GOOD)",
+        "Hash Table (GOOD)",
+        "Superblock Hash (GOOD)"
+      ],
+      "hashFailures": [],
+      "toolExit": 0
+    }
+  ],
+  "hardwareTested": false,
+  "retailDataIncluded": false
+}

@@ -71,6 +71,8 @@
 ```sh
 make font
 python3 port/switch/build.py
+# 本地安装 hacbrewpack 并准备自己的私有 keyset 后：
+python3 port/switch/package.py --keyset /private/path/prod.keys
 ```
 
 产物位于 `build/switch/`；`package/` 中包含 NSP 打包输入。打包使用私有的本地 keyset，
