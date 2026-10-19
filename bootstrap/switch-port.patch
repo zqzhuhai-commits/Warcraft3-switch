@@ -1,0 +1,2503 @@
+diff --git a/.github/workflows/c-cpp.yml b/.github/workflows/c-cpp.yml
+deleted file mode 100644
+index a356128..0000000
+--- a/.github/workflows/c-cpp.yml
++++ /dev/null
+@@ -1,165 +0,0 @@
+-name: CI
+-
+-on:
+-  push:
+-    branches: ["main"]
+-    tags: ["v*"]
+-  pull_request:
+-    branches: ["main"]
+-
+-jobs:
+-  media:
+-    name: Linux release music and runtime packaging
+-    runs-on: ubuntu-latest
+-    permissions:
+-      contents: read
+-    steps:
+-      - uses: actions/checkout@v4
+-      - name: Build Linux dependency environment
+-        run: docker build --tag openrealm-media-ci .github/docker/ci
+-      - name: Build and verify the release media package
+-        run: |
+-          docker run --rm --mount "type=bind,source=$PWD,target=/workspace" \
+-            --workdir /workspace openrealm-media-ci bash -ec '
+-              make BUILD=release FFMPEG=1 BIN_DIR=build/media/bin LIB_DIR=build/media/lib SHARE_INSTALL=build/media/share openwarcraft3
+-              make BUILD=release BIN_DIR=build/media/bin LIB_DIR=build/media/lib test-sound
+-              mkdir -p build/media/package/bin build/media/package/lib
+-              cp build/media/bin/openwarcraft3 build/media/package/bin/
+-              cp build/media/lib/*.so build/media/package/lib/
+-              python3 dist-scripts/linux/bundle_media.py build/media/bin/openwarcraft3 build/media/package/lib
+-              ldd build/media/package/bin/openwarcraft3 > build/media/package/dependencies.txt
+-              cat build/media/package/dependencies.txt
+-              ! grep -q "not found" build/media/package/dependencies.txt
+-            '
+-
+-  eos:
+-    name: EOS regressions and live multiplayer checks
+-    # Fork PRs cannot read the licensed SDK/player credentials. Run their normal
+-    # SDK-free checks; never execute fork code through pull_request_target.
+-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+-    runs-on: ubuntu-latest
+-    timeout-minutes: 25
+-    permissions:
+-      contents: read
+-      packages: read
+-    steps:
+-      - uses: actions/checkout@v4
+-        with:
+-          persist-credentials: false
+-
+-      - name: Fetch the pinned private EOS SDK archive
+-        uses: actions/checkout@v4
+-        with:
+-          repository: ${{ vars.EOS_SDK_REPOSITORY }}
+-          ref: ${{ vars.EOS_SDK_REF }}
+-          ssh-key: ${{ secrets.EOS_SDK_DEPLOY_KEY }}
+-          persist-credentials: false
+-          path: data/eos-archive
+-
+-      - name: Verify SDK and prepare restricted player config
+-        env:
+-          OPENREALM_EOS_PRODUCT_ID: ${{ secrets.OPENREALM_EOS_PRODUCT_ID }}
+-          OPENREALM_EOS_SANDBOX_ID: ${{ secrets.OPENREALM_EOS_SANDBOX_ID }}
+-          OPENREALM_EOS_DEPLOYMENT_ID: ${{ secrets.OPENREALM_EOS_DEPLOYMENT_ID }}
+-          OPENREALM_EOS_CLIENT_ID: ${{ secrets.OPENREALM_EOS_CLIENT_ID }}
+-          OPENREALM_EOS_CLIENT_SECRET: ${{ secrets.OPENREALM_EOS_CLIENT_SECRET }}
+-        run: python3 dist-scripts/eos/prepare_release.py --platform Linux --archive data/eos-archive/EOS-SDK-1.19.2.1-CL58105819-runtime.zip
+-
+-      - name: Pull Linux test environment
+-        env:
+-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+-          GH_ACTOR: ${{ github.actor }}
+-        run: |
+-          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GH_ACTOR" --password-stdin
+-          docker pull ghcr.io/corepunch/open-realm-ci:ubuntu-24.04
+-          docker logout ghcr.io
+-          # Include PR dependency changes and software GL for the actual client.
+-          # Dependency installation stays in the shared image Dockerfile.
+-          docker build --tag openrealm-eos-ci .github/docker/ci
+-
+-      - name: Run full EOS-enabled suite
+-        run: >-
+-          docker run --rm --mount "type=bind,source=$PWD,target=/workspace"
+-          --workdir /workspace openrealm-eos-ci
+-          make EOS=1 TEST_JOBS=4 test
+-
+-      - name: Check live login, gameplay, relay, graceful leave and host crash
+-        env:
+-          EOS_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+-        run: python3 dist-scripts/eos/run_acceptance.py --image openrealm-eos-ci --run-id "$EOS_RUN_ID"
+-
+-  notifications:
+-    name: Discord notification fixtures
+-    runs-on: ubuntu-latest
+-    permissions:
+-      contents: read
+-    steps:
+-      - uses: actions/checkout@v4
+-        with:
+-          persist-credentials: false
+-      - run: python3 tests/test_discord_notifications.py
+-
+-  test:
+-    runs-on: ubuntu-latest
+-    container:
+-      image: ghcr.io/corepunch/open-realm-ci:ubuntu-24.04
+-      credentials:
+-        username: ${{ github.actor }}
+-        password: ${{ secrets.GITHUB_TOKEN }}
+-    permissions:
+-      contents: read
+-      packages: read
+-
+-    steps:
+-      - uses: actions/checkout@v4
+-
+-      - name: Run unit tests
+-        run: make test
+-
+-  sc2api:
+-    name: SC2API Raw (${{ matrix.build }}, no protobuf dependency)
+-    runs-on: ubuntu-latest
+-    container:
+-      image: ghcr.io/corepunch/open-realm-ci:ubuntu-24.04
+-      credentials:
+-        username: ${{ github.actor }}
+-        password: ${{ secrets.GITHUB_TOKEN }}
+-    permissions:
+-      contents: read
+-      packages: read
+-    strategy:
+-      matrix:
+-        build: [debug, release]
+-    steps:
+-      - uses: actions/checkout@v4
+-      - name: Build optional Raw interface
+-        run: make BUILD=${{ matrix.build }} SC2API=1 PROTOBUF=0 openwarcraft3 openwarcraft3-tests
+-      - name: Verify adapter, server scheduling and real WebSocket lifecycle
+-        run: make BUILD=${{ matrix.build }} SC2API=1 PROTOBUF=0 WC3_PATTERN='wc3_sc2api*' test-wc3-engine test-server-net test-sc2api-transport
+-
+-  build:
+-    runs-on: ubuntu-latest
+-    container:
+-      image: ghcr.io/corepunch/open-realm-ci:ubuntu-24.04
+-      credentials:
+-        username: ${{ github.actor }}
+-        password: ${{ secrets.GITHUB_TOKEN }}
+-    permissions:
+-      contents: read
+-      packages: read
+-
+-    steps:
+-      - uses: actions/checkout@v4
+-
+-      - name: Build
+-        run: make
+-
+-      - name: Upload build artifacts
+-        uses: actions/upload-artifact@v4
+-        with:
+-          name: openwarcraft3-linux-x64
+-          path: |
+-            build/bin/openwarcraft3
+-            build/lib/
+-            build/share/
+-          if-no-files-found: error
+diff --git a/.github/workflows/ci-image-refresh.yml b/.github/workflows/ci-image-refresh.yml
+deleted file mode 100644
+index e5092f1..0000000
+--- a/.github/workflows/ci-image-refresh.yml
++++ /dev/null
+@@ -1,43 +0,0 @@
+-name: Refresh Linux CI Image
+-
+-on:
+-  push:
+-    branches: ["main"]
+-    paths:
+-      - ".github/docker/ci/Dockerfile"
+-      - ".github/workflows/ci-image-refresh.yml"
+-  schedule:
+-    # Refresh daily so the image picks up Ubuntu base and APT security updates.
+-    - cron: "17 3 * * *"
+-  workflow_dispatch:
+-
+-permissions:
+-  contents: read
+-  packages: write
+-
+-jobs:
+-  refresh:
+-    name: Rebuild Linux CI image
+-    runs-on: ubuntu-latest
+-
+-    steps:
+-      - uses: actions/checkout@v4
+-
+-      - name: Log in to GitHub Container Registry
+-        env:
+-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+-        run: |
+-          printf '%s' "$GHCR_TOKEN" |
+-            docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+-
+-      - name: Rebuild CI image with current security updates
+-        run: |
+-          docker build \
+-            --pull \
+-            --no-cache \
+-            --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+-            --tag ghcr.io/corepunch/open-realm-ci:ubuntu-24.04 \
+-            .github/docker/ci
+-
+-      - name: Publish CI image
+-        run: docker push ghcr.io/corepunch/open-realm-ci:ubuntu-24.04
+diff --git a/.github/workflows/discord-notify.yml b/.github/workflows/discord-notify.yml
+deleted file mode 100644
+index 690e9b4..0000000
+--- a/.github/workflows/discord-notify.yml
++++ /dev/null
+@@ -1,88 +0,0 @@
+-name: Discord Notify
+-
+-on:
+-  # pull_request_target (not pull_request) so fork PRs still see
+-  # DISCORD_WEBHOOK_URL. Safe: this job never checks out code.
+-  pull_request_target:
+-    types: [opened, ready_for_review]
+-  release:
+-    types: [published]
+-  workflow_dispatch:
+-    inputs:
+-      release_tag:
+-        description: 'Published release tag to announce (manual catch-up; posts again if repeated)'
+-        required: true
+-        type: string
+-
+-permissions:
+-  contents: read
+-
+-jobs:
+-  notify:
+-    # Drafts announce once, when marked ready; bot PRs never post.
+-    if: github.event_name == 'pull_request_target' && github.event.pull_request.draft == false && github.event.pull_request.user.type != 'Bot'
+-    runs-on: ubuntu-latest
+-    steps:
+-      - name: Post compact title card
+-        env:
+-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+-          PR_NUMBER: ${{ github.event.pull_request.number }}
+-          PR_TITLE: ${{ github.event.pull_request.title }}
+-          PR_URL: ${{ github.event.pull_request.html_url }}
+-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+-          PR_AVATAR: ${{ github.event.pull_request.user.avatar_url }}
+-          PR_AUTHOR_URL: ${{ github.event.pull_request.user.html_url }}
+-          PR_BODY: ${{ github.event.pull_request.body }}
+-        run: |
+-          if [ -z "$DISCORD_WEBHOOK_URL" ]; then echo "DISCORD_WEBHOOK_URL not set, skipping."; exit 0; fi
+-          TITLE="#$PR_NUMBER: $PR_TITLE"; URL="$PR_URL"
+-          # Summary: first paragraph of the body (headings, comments and the
+-          # Claude Code footer dropped), cut at a word boundary to ~200 chars.
+-          jq -n --arg author "$PR_AUTHOR" --arg avatar "$PR_AVATAR" --arg author_url "$PR_AUTHOR_URL" --arg title "$TITLE" --arg url "$URL" --arg body "$PR_BODY" \
+-            '($body | gsub("<!--[\\s\\S]*?-->"; "") | gsub("\r"; "") | split("\n\n")
+-              | map(split("\n") | map(select(test("^\\s*#|Generated with \\[Claude") | not) | sub("^\\s*[-*]\\s+"; ""))
+-                    | join(" ") | gsub("\\s+"; " ") | sub("^ | $"; ""; "g"))
+-              | map(select(length > 0)) | first // ""
+-              | if length > 200 then (.[0:200] | sub(" \\S*$"; "")) + "…" else . end) as $summary
+-            | {embeds: [{author: {name: $author, url: $author_url, icon_url: $avatar}, title: ($title | .[0:256]), url: $url, color: 3066993}
+-                + (if $summary == "" then {} else {description: $summary} end)], allowed_mentions: {parse: []}}' \
+-            | curl -sS --fail-with-body --connect-timeout 10 --max-time 30 \
+-                -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"
+-
+-  notify-release:
+-    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+-    runs-on: ubuntu-latest
+-    steps:
+-      - name: Post published release card
+-        env:
+-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+-          RELEASE_TAG: ${{ inputs.release_tag }}
+-        run: |
+-          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+-            echo '::error::DISCORD_WEBHOOK_URL is not set; release announcement cannot be sent.'
+-            exit 1
+-          fi
+-          if [ "$GITHUB_EVENT_NAME" = 'workflow_dispatch' ]; then
+-            TAG_PATH=$(jq -rn --arg tag "$RELEASE_TAG" '$tag | @uri')
+-            gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG_PATH" > release.json
+-          else
+-            jq '.release' "$GITHUB_EVENT_PATH" > release.json
+-          fi
+-          if ! jq -e '.draft == false and .published_at != null' release.json > /dev/null; then
+-            echo '::error::Only a published release can be announced.'
+-            exit 1
+-          fi
+-          # Event/API text is data for jq; never execute or interpolate it as code.
+-          jq '
+-            (.body // "" | gsub("<!--[\\s\\S]*?-->"; "") | gsub("\r"; "") | split("\n\n")
+-              | map(split("\n") | map(select(test("^\\s*#") | not)) | join(" ")
+-                    | gsub("\\s+"; " ") | sub("^ | $"; ""; "g"))
+-              | map(select(length > 0)) | first // ""
+-              | if length > 500 then (.[0:500] | sub(" \\S*$"; "")) + "…" else . end) as $summary
+-            | {embeds: [{author: {name: .author.login, url: .author.html_url, icon_url: .author.avatar_url},
+-                title: (("Release: " + (if (.name // "") == "" then .tag_name else .name end)) | .[0:256]),
+-                url: .html_url, color: 3447003}
+-                + (if $summary == "" then {} else {description: $summary} end)], allowed_mentions: {parse: []}}' release.json \
+-            | curl -sS --fail-with-body --connect-timeout 10 --max-time 30 \
+-                -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"
+diff --git a/.github/workflows/docs.yml b/.github/workflows/docs.yml
+deleted file mode 100644
+index a7b2d51..0000000
+--- a/.github/workflows/docs.yml
++++ /dev/null
+@@ -1,74 +0,0 @@
+-name: Deploy Docs
+-
+-on:
+-  push:
+-    branches: ["main"]
+-    paths:
+-      - "README.md"
+-      - "docs/**"
+-      - "games/**"
+-      - "client/**"
+-      - "common/**"
+-      - "renderer/**"
+-      - "server/**"
+-      - "shared/**"
+-      - "sound/**"
+-      - "vendor/**"
+-      - "tools/**"
+-      - "port/web/**"
+-      - "share/**"
+-      - "Makefile"
+-      - "mkdocs.yml"
+-      - "requirements-docs.txt"
+-      - ".github/workflows/docs.yml"
+-  workflow_dispatch:
+-
+-jobs:
+-  build:
+-    runs-on: ubuntu-latest
+-    permissions:
+-      contents: read
+-      pages: read
+-    steps:
+-      - uses: actions/checkout@v4
+-      - name: Set up Python
+-        uses: actions/setup-python@v5
+-        with:
+-          python-version: "3.x"
+-      - name: Install MkDocs
+-        run: python -m pip install -r requirements-docs.txt
+-      - name: Setup Pages
+-        uses: actions/configure-pages@v4
+-      # The browser engine uses pthreads, WasmFS and OffscreenCanvas; this
+-      # must be the actual static engine target, not the foundation probe.
+-      - name: Set up Emscripten
+-        uses: emscripten-core/setup-emsdk@v16
+-        with:
+-          version: "4.0.21"
+-      - name: Prepare embedded font
+-        run: make font
+-      - name: Build Warcraft III browser engine
+-        run: make web-warcraft3-engine
+-      - name: Build with MkDocs
+-        # Broken navigation and document links must fail before publication.
+-        run: mkdocs build --strict
+-      - name: Package browser game into Pages artifact
+-        run: python3 port/web/publish-pages.py build/web/engine site/play
+-      - name: Upload artifact
+-        uses: actions/upload-pages-artifact@v3
+-        with:
+-          path: ./site
+-
+-  deploy:
+-    environment:
+-      name: github-pages
+-      url: ${{ steps.deployment.outputs.page_url }}
+-    runs-on: ubuntu-latest
+-    needs: build
+-    permissions:
+-      pages: write
+-      id-token: write
+-    steps:
+-      - name: Deploy to GitHub Pages
+-        id: deployment
+-        uses: actions/deploy-pages@v4
+diff --git a/.github/workflows/preview-release.yml b/.github/workflows/preview-release.yml
+new file mode 100644
+index 0000000..e079c87
+--- /dev/null
++++ b/.github/workflows/preview-release.yml
+@@ -0,0 +1,22 @@
++name: Publish preview release
++on:
++  push:
++    branches: [main]
++    paths: ['release-assets/**']
++    tags: ['v*-preview']
++permissions:
++  contents: write
++jobs:
++  release:
++    runs-on: ubuntu-24.04
++    steps:
++      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
++        with:
++          persist-credentials: false
++      - name: Verify staged artifacts
++        working-directory: release-assets
++        run: sha256sum --check SHA256SUMS
++      - name: Publish experimental build
++        env:
++          GH_TOKEN: ${{ github.token }}
++        run: gh release create v0.1.0-preview --target "$GITHUB_SHA" --prerelease --title "OpenRealm Switch 0.1.0 Preview" --notes-file RELEASE.md release-assets/*
+diff --git a/.github/workflows/release.yml b/.github/workflows/release.yml
+deleted file mode 100644
+index 6e5bc6e..0000000
+--- a/.github/workflows/release.yml
++++ /dev/null
+@@ -1,318 +0,0 @@
+-name: Release
+-
+-on:
+-  release:
+-    types: [published]
+-  workflow_dispatch:
+-    inputs:
+-      tag:
+-        description: 'Release tag to attach assets to (e.g. v0.0.1-alpha)'
+-        required: true
+-      publish:
+-        description: 'Upload the completed assets to the release (disable for validation)'
+-        type: boolean
+-        default: true
+-
+-jobs:
+-  build:
+-    strategy:
+-      fail-fast: false
+-      matrix:
+-        include:
+-          - os: ubuntu-latest
+-            name: linux-x64
+-            archive: openwarcraft3-linux-x64.tar.gz
+-          - os: macos-15-intel
+-            name: macos-x64
+-            archive: openwarcraft3-macos-x64.tar.gz
+-          - os: windows-latest
+-            name: windows-x64
+-            archive: openwarcraft3-windows-x64.zip
+-
+-    runs-on: ${{ matrix.os }}
+-    permissions:
+-      contents: write
+-      packages: read
+-
+-    steps:
+-      - uses: actions/checkout@v4
+-        with:
+-          # Uploads must build the release tag, even when dispatched from a recovery branch.
+-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.publish && inputs.tag || github.ref }}
+-
+-      - name: Fetch the pinned private EOS SDK archive
+-        uses: actions/checkout@v4
+-        with:
+-          repository: ${{ vars.EOS_SDK_REPOSITORY }}
+-          ref: ${{ vars.EOS_SDK_REF }}
+-          ssh-key: ${{ secrets.EOS_SDK_DEPLOY_KEY }}
+-          persist-credentials: false
+-          path: data/eos-archive
+-
+-      - name: Install dependencies (Linux)
+-        if: runner.os == 'Linux'
+-        run: |
+-          # Keep releases independent of the asynchronously published shared CI image.
+-          sudo apt-get update
+-          sudo apt-get install -y --no-install-recommends \
+-            build-essential \
+-            ca-certificates \
+-            git \
+-            libavcodec-dev \
+-            libavformat-dev \
+-            libavutil-dev \
+-            libgl-dev \
+-            libgles2-mesa-dev \
+-            libjpeg-dev \
+-            libsdl2-dev \
+-            libswresample-dev \
+-            libswscale-dev \
+-            patchelf \
+-            pkg-config \
+-            python3 \
+-            zlib1g-dev
+-
+-      - name: Install dependencies (macOS)
+-        if: runner.os == 'macOS'
+-        run: brew install sdl2 libjpeg
+-
+-      - name: Install dependencies (Windows)
+-        if: runner.os == 'Windows'
+-        uses: msys2/setup-msys2@v2
+-        with:
+-          msystem: MINGW64
+-          update: false
+-          install: >-
+-            mingw-w64-x86_64-gcc
+-            mingw-w64-x86_64-SDL2
+-            mingw-w64-x86_64-libepoxy
+-            mingw-w64-x86_64-zlib
+-            mingw-w64-x86_64-python
+-            make
+-            zip
+-            diffutils
+-
+-      - name: Set up release SDK downloader
+-        uses: actions/setup-python@v5
+-        with:
+-          python-version: '3.12'
+-
+-      - name: Download and verify EOS C SDK
+-        shell: bash
+-        env:
+-          EOS_PLATFORM: ${{ runner.os }}
+-          OPENREALM_EOS_PRODUCT_ID: ${{ secrets.OPENREALM_EOS_PRODUCT_ID }}
+-          OPENREALM_EOS_SANDBOX_ID: ${{ secrets.OPENREALM_EOS_SANDBOX_ID }}
+-          OPENREALM_EOS_DEPLOYMENT_ID: ${{ secrets.OPENREALM_EOS_DEPLOYMENT_ID }}
+-          OPENREALM_EOS_CLIENT_ID: ${{ secrets.OPENREALM_EOS_CLIENT_ID }}
+-          OPENREALM_EOS_CLIENT_SECRET: ${{ secrets.OPENREALM_EOS_CLIENT_SECRET }}
+-        run: python dist-scripts/eos/prepare_release.py --platform "$EOS_PLATFORM" --archive data/eos-archive/EOS-SDK-1.19.2.1-CL58105819-runtime.zip
+-
+-      - name: Build (Linux)
+-        if: runner.os == 'Linux'
+-        # FFmpeg also decodes background music; omitting it made releases silent.
+-        run: make BUILD=release FFMPEG=1 EOS=1 EOS_CONFIG_FILE=data/eos/eos.cfg build
+-
+-      - name: Build (macOS)
+-        if: runner.os == 'macOS'
+-        run: make BUILD=release ARCH=x86_64 EOS=1 EOS_CONFIG_FILE=data/eos/eos.cfg build
+-
+-      - name: Build (Windows)
+-        if: runner.os == 'Windows'
+-        shell: msys2 {0}
+-        run: make BUILD=release EOS=1 EOS_CONFIG_FILE=data/eos/eos.cfg build
+-
+-      - name: Verify EOS session regressions (Unix)
+-        if: runner.os != 'Windows'
+-        run: >-
+-          make BUILD=release ARCH=x86_64 EOS=1
+-          BIN_DIR=build/eos-tests/bin LIB_DIR=build/eos-tests/lib
+-          SHARE_INSTALL=build/eos-tests/share test-eos-service
+-
+-      - name: Verify EOS session regressions (Windows)
+-        if: runner.os == 'Windows'
+-        shell: msys2 {0}
+-        run: |
+-          # Windows has no Unix rpath; fixture tools and the test client need these DLLs on PATH.
+-          export PATH="$PWD/build/eos-tests/lib:$PATH"
+-          make BUILD=release EOS=1 \
+-            BIN_DIR=build/eos-tests/bin LIB_DIR=build/eos-tests/lib \
+-            SHARE_INSTALL=build/eos-tests/share test-eos-service
+-
+-      - name: Create release archive (Unix)
+-        if: runner.os != 'Windows'
+-        run: |
+-          # Preserve the executable's ../lib and ../share lookup paths.
+-          mkdir -p release/bin release/lib release/licenses/EOS
+-          cp build/bin/openwarcraft3 release/bin/
+-          cp -r build/lib/. release/lib/
+-          cp -r build/share release/
+-          cp data/eos/ThirdPartyNotices/ThirdPartySoftwareNotice.txt release/licenses/EOS/
+-          if [ "${{ runner.os }}" = "Linux" ]; then
+-            python3 dist-scripts/linux/bundle_media.py build/bin/openwarcraft3 release/lib
+-          fi
+-          tar -czf ${{ matrix.archive }} -C release .
+-
+-      - name: Create release archive (Windows)
+-        if: runner.os == 'Windows'
+-        shell: msys2 {0}
+-        run: |
+-          mkdir -p release/licenses/EOS
+-          cp build/bin/openwarcraft3.exe release/
+-          cp build/bin/EOSSDK-Win64-Shipping.dll release/
+-          cp -r build/lib/. release/
+-          cp -r build/share release/
+-          cp data/eos/ThirdPartyNotices/ThirdPartySoftwareNotice.txt release/licenses/EOS/
+-          # Bundle the MinGW runtime closure (SDL2, zlib, libepoxy plus
+-          # transitive deps like libgcc/libwinpthread) beside the exe: a
+-          # clean Windows install has no MSYS2. Fails the job when a
+-          # dependency is unresolved or a required DLL is absent (issue #462).
+-          bash dist-scripts/windows/bundle_mingw_dlls.sh release \
+-            build/bin/openwarcraft3.exe build/lib/*.dll release/EOSSDK-Win64-Shipping.dll
+-          cd release && zip -r ../${{ matrix.archive }} .
+-
+-      - name: Determine release tag
+-        id: get_tag
+-        shell: bash
+-        run: |
+-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+-            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+-          else
+-            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+-          fi
+-
+-      - name: Upload release asset
+-        if: github.event_name == 'release' || inputs.publish
+-        env:
+-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+-        shell: bash
+-        run: |
+-          gh release upload "${{ steps.get_tag.outputs.tag }}" \
+-            "${{ matrix.archive }}" \
+-            --clobber
+-
+-  flatpak-build:
+-    name: Build Flatpak
+-    runs-on: ubuntu-latest
+-    permissions:
+-      contents: read
+-    container:
+-      image: ghcr.io/flathub-infra/flatpak-github-actions:freedesktop-25.08
+-      options: --privileged
+-
+-    steps:
+-      - uses: actions/checkout@v4
+-        with:
+-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.publish && inputs.tag || github.ref }}
+-
+-      - name: Fetch the pinned private EOS SDK archive
+-        uses: actions/checkout@v4
+-        with:
+-          repository: ${{ vars.EOS_SDK_REPOSITORY }}
+-          ref: ${{ vars.EOS_SDK_REF }}
+-          ssh-key: ${{ secrets.EOS_SDK_DEPLOY_KEY }}
+-          persist-credentials: false
+-          path: data/eos-archive
+-
+-      - name: Download and verify EOS C SDK
+-        env:
+-          OPENREALM_EOS_PRODUCT_ID: ${{ secrets.OPENREALM_EOS_PRODUCT_ID }}
+-          OPENREALM_EOS_SANDBOX_ID: ${{ secrets.OPENREALM_EOS_SANDBOX_ID }}
+-          OPENREALM_EOS_DEPLOYMENT_ID: ${{ secrets.OPENREALM_EOS_DEPLOYMENT_ID }}
+-          OPENREALM_EOS_CLIENT_ID: ${{ secrets.OPENREALM_EOS_CLIENT_ID }}
+-          OPENREALM_EOS_CLIENT_SECRET: ${{ secrets.OPENREALM_EOS_CLIENT_SECRET }}
+-        run: python3 dist-scripts/eos/prepare_release.py --platform Linux --archive data/eos-archive/EOS-SDK-1.19.2.1-CL58105819-runtime.zip
+-
+-      - name: Prepare EOS Flatpak release manifest
+-        run: |
+-          mkdir -p build
+-          cp dist-scripts/flathub/io.github.corepunch.OpenRealm.yml dist-scripts/flathub/eos-release.yml
+-          cat >> dist-scripts/flathub/eos-release.yml <<'EOS_ENV'
+-
+-          build-options:
+-            env:
+-              EOS: '1'
+-              EOS_CONFIG_FILE: data/eos/eos.cfg
+-          EOS_ENV
+-
+-      - name: Build Flatpak bundle
+-        uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3
+-        with:
+-          manifest-path: dist-scripts/flathub/eos-release.yml
+-          bundle: build/io.github.corepunch.OpenRealm.flatpak
+-          arch: x86_64
+-          # Source snapshots contain licensed SDK files and player credentials.
+-          cache: false
+-          restore-cache: false
+-          save-cache: false
+-          upload-artifact: false
+-
+-      - name: Upload Flatpak release inputs
+-        if: github.event_name == 'release' || inputs.publish
+-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+-        with:
+-          name: openrealm-flatpak-release-inputs
+-          path: |
+-            build/io.github.corepunch.OpenRealm.flatpak
+-            dist-scripts/flathub/install.sh
+-            dist-scripts/flathub/uninstall.sh
+-          if-no-files-found: error
+-          retention-days: 1
+-
+-  flatpak-release:
+-    name: Publish Flatpak
+-    needs: flatpak-build
+-    if: github.event_name == 'release' || inputs.publish
+-    runs-on: ubuntu-latest
+-    permissions:
+-      actions: read
+-      contents: write
+-
+-    steps:
+-      - name: Download Flatpak release inputs
+-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+-        with:
+-          name: openrealm-flatpak-release-inputs
+-          path: release-flatpak
+-
+-      - name: Determine release tag
+-        id: get_tag
+-        shell: bash
+-        run: |
+-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+-            RAW_TAG="${{ github.event.inputs.tag }}"
+-          else
+-            RAW_TAG="${{ github.ref_name }}"
+-          fi
+-          SAFE_TAG="$(printf '%s' "$RAW_TAG" | sed 's#[^A-Za-z0-9._-]#-#g')"
+-          echo "tag=$RAW_TAG" >> "$GITHUB_OUTPUT"
+-          echo "safe_tag=$SAFE_TAG" >> "$GITHUB_OUTPUT"
+-
+-      - name: Assemble Flatpak installer package
+-        shell: bash
+-        run: |
+-          python3 - <<'PYZIP'
+-          from pathlib import Path
+-          from zipfile import ZIP_DEFLATED, ZipFile
+-
+-          root = Path("release-flatpak")
+-          output = root / "openrealm-flatpak-${{ steps.get_tag.outputs.safe_tag }}.zip"
+-          files = [
+-              root / "build/io.github.corepunch.OpenRealm.flatpak",
+-              root / "dist-scripts/flathub/install.sh",
+-              root / "dist-scripts/flathub/uninstall.sh",
+-          ]
+-          with ZipFile(output, "w", ZIP_DEFLATED) as archive:
+-              for path in files:
+-                  archive.write(path, path.name)
+-          PYZIP
+-
+-      - name: Upload Flatpak release assets
+-        env:
+-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+-        run: |
+-          gh release upload "${{ steps.get_tag.outputs.tag }}" \
+-            release-flatpak/build/io.github.corepunch.OpenRealm.flatpak \
+-            "release-flatpak/openrealm-flatpak-${{ steps.get_tag.outputs.safe_tag }}.zip" \
+-            --repo "$GITHUB_REPOSITORY" \
+-            --clobber
+diff --git a/.github/workflows/switch-build.yml b/.github/workflows/switch-build.yml
+new file mode 100644
+index 0000000..550e343
+--- /dev/null
++++ b/.github/workflows/switch-build.yml
+@@ -0,0 +1,37 @@
++name: Switch native build
++on:
++  push:
++    branches: [main]
++    paths-ignore: ['release-assets/**', '**.md']
++  pull_request:
++  workflow_dispatch:
++permissions:
++  contents: read
++jobs:
++  build:
++    runs-on: ubuntu-24.04
++    container: devkitpro/devkita64:latest
++    timeout-minutes: 30
++    steps:
++      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
++      - name: Install platform libraries
++        run: dkp-pacman -Syu --noconfirm --needed switch-sdl2 switch-mesa switch-zlib
++      - name: Generate font and build native engine
++        run: |
++          make font
++          python3 port/switch/build.py
++      - name: Check ELF and package inputs
++        run: |
++          /opt/devkitpro/devkitA64/bin/aarch64-none-elf-readelf -h build/switch/openrealm.elf
++          test -s build/switch/openrealm.nro
++          test -s build/switch/package/exefs/main
++          test -s build/switch/package/exefs/main.npdm
++      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
++        with:
++          name: switch-native-build
++          path: |
++            build/switch/openrealm.nro
++            build/switch/openrealm.elf
++            build/switch/package/
++            build/switch/build-info.json
++          retention-days: 30
+diff --git a/.gitignore b/.gitignore
+index 1b8b1f9..3d57cef 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -23,3 +23,10 @@ __pycache__/
+ # Private EOS player-client configuration (never cvars or committed credentials).
+ eos.cfg
+ dist-scripts/flathub/eos-release.yml
++
++# Private packaging inputs and local diagnostics.
++*.keys
++keys.dat
++keys.txt
++keys.ini
++*.log
+diff --git a/AGENTS.md b/AGENTS.md
+index 91cdebc..9fc15be 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -200,6 +200,8 @@ This codebase is inspired by **Quake 2** (id Software). The developer is deeply
+ | Renderer backend: thin pipelines, root struct, GL state cache, MSAA/alpha-key, `r_stats` | [docs/renderer-backend.md](docs/renderer-backend.md) |
+ | `CS_SKY`, WC3 `SetSkyModel`, camera-relative sky models, sequence-0 animation, cross-game producer gaps | [docs/architecture/skybox-and-cs-sky.md](docs/architecture/skybox-and-cs-sky.md) |
+ 
++| Switch native build, input mapping, SD paths and test limitations | [docs/platform/switch.md](docs/platform/switch.md) |
++
+ ## Coding Style
+ 
+ - Follow the C coding style used in the Quake 2 source code (id Software style).
+diff --git a/NOTICE-SWITCH.md b/NOTICE-SWITCH.md
+new file mode 100644
+index 0000000..beed496
+--- /dev/null
++++ b/NOTICE-SWITCH.md
+@@ -0,0 +1,20 @@
++# Switch build notices
++
++OpenRealm is MIT licensed; see LICENSE and individual vendored dependency notices.
++The project is not affiliated with Blizzard Entertainment or Nintendo.
++
++The binary statically links the following libraries from devkitPro packages:
++
++- SDL2 2.28.5: zlib license, https://github.com/devkitPro/SDL
++- Mesa 20.1.0: MIT and component-specific permissive licenses, https://gitlab.freedesktop.org/mesa/mesa
++- libdrm_nouveau 1.0.1: MIT, https://github.com/devkitPro/libdrm_nouveau
++- libnx 4.12.0: ISC, https://github.com/switchbrew/libnx
++- zlib 1.3.1: zlib license, https://zlib.net/zlib_license.html
++- GCC 16.1.0 runtime/libstdc++: GPLv3 with GCC Runtime Library Exception,
++  https://gcc.gnu.org/onlinedocs/libstdc++/manual/license.html
++- Newlib 4.6.0.20260123: component-specific permissive licenses,
++  https://sourceware.org/newlib/COPYING.NEWLIB
++
++These are community homebrew libraries, not proprietary Nintendo SDK binaries.
++No retail game data or keysets are included. Test fixtures originate from the
++upstream source tree and are not loaded as a replacement retail installation.
+diff --git a/README.md b/README.md
+index ce56b5b..9109531 100644
+--- a/README.md
++++ b/README.md
+@@ -1,160 +1,79 @@
+-<p align="center">
+-  <img width="480" height="320" src="https://github.com/user-attachments/assets/e4491ef4-fa69-4efd-814f-f7335d4c448a" />
+-</p>
++# Warcraft3-switch / OpenRealm
+ 
+-# OpenRealm
++《魔兽争霸 III》OpenRealm 引擎的 Nintendo Switch 原生移植测试版。
+ 
+-OpenRealm is an open-source, Quake-style engine and compatibility project for Blizzard-era game data. Warcraft III is the primary playable target and runs on Windows, Linux, macOS, and iPad; StarCraft II and World of Warcraft provide additional format and renderer targets.
++**状态：已完成 Switch 交叉编译并生成 NSP/NRO。尚未通过 Switch 实机验证，不能视为稳定可玩版本。**
+ 
+-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![CI](https://github.com/corepunch/open-realm/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/corepunch/open-realm/actions/workflows/c-cpp.yml) [![Platform: Windows, Linux, macOS, iPadOS](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20iPadOS-lightgrey)](#run-on-ipad) [![Language: C](https://img.shields.io/badge/Language-C-blue.svg)](#) [![Discord](https://img.shields.io/badge/Discord-join-blue?logo=discord)](https://discord.gg/MxkUMWsKGs)
++基于 [corepunch/open-realm](https://github.com/corepunch/open-realm)，固定上游提交
++`8853d069c21c94a981121066e1d78e967676fae4`。原项目采用 MIT 许可，版权和许可证保留在仓库中。
+ 
+-The project does not include retail game data. Use it only with data you legally own. OpenRealm is not affiliated with Blizzard Entertainment.
++## 下载与安装
+ 
+-<p align="center">
+-  <img src="docs/images/screenshot1.jpg" width="31%" style="margin-right:2%;" />
+-  <img src="docs/images/screenshot3.jpg" width="31%" style="margin-right:2%;" />
+-  <a href="https://youtu.be/EcuoDoOztjA">
+-  <img src="docs/images/screenshot4.jpg" width="31%" />
+-  </a>
+-</p>
++从本仓库的 [Releases](https://github.com/zqzhuhai-commits/Warcraft3-switch/releases)
++下载 `OpenRealm-Switch-0.1.0-preview.nsp`。这是包含原生引擎的完整应用包，不是 NRO 前端。
++也提供 NRO 作为备用运行方式；NRO 需使用完整应用内存模式，不支持相册 Applet 模式。
+ 
+-## Current targets
++1. 将你拥有的 **Warcraft III Classic 的 MPQ 文件**放到 SD 卡目录：
++   `sd:/switch/openrealm/data/`。
++2. 必需资源通常包括 `War3.mpq` 和 `War3Local.mpq`；冰封王座还需
++   `War3x.mpq` 和 `War3xLocal.mpq`。可选的 `Maps/` 文件夹也放在该目录。
++3. 在支持自制软件的 Switch 环境安装 NSP 后，从主界面启动。
++4. 没有 `War3.mpq` 时会显示资源说明页，按 B 返回。存在 `War3x.mpq` 时默认进入 TFT 模式。
+ 
+-- **Warcraft III** — `openwarcraft3`, the main development target, including the client/server runtime, JASS, SLK/profile data, FDF UI, campaign flow, maps, fog, units, and networking. Also builds as an iPad app with touch controls (see [Run on iPad](#run-on-ipad)).
+-- **World of Warcraft** — `openwow`, an exploratory M2/WMO/DBC/MPQ and UI target with a Lua-backed interface.
+-- **StarCraft II** — `opensc2`, an exploratory M3/SC2Map/SC2Layout target.
++游戏资源和密钥均不随仓库或安装包提供；Reforged 的 CASC 资源不在此测试版的支持范围内。
+ 
+-The shared runtime contains the client, server, renderer backend, networking, archive loading, console/cvars, sound, and math libraries. Game-specific code lives under `games/<game>/` and is connected through Quake 2-style import/export tables.
++## 操作
+ 
+-## Download
++| 按键 | 功能 |
++|---|---|
++| 左摇杆 | 移动鼠标指针 |
++| L + 左摇杆 | 精细移动指针 |
++| A / ZR | 左键选择；按住拖动框选 |
++| R | 右键 / 移动、攻击等智能指令 |
++| ZL | Shift / 追加选择、队列指令 |
++| 右摇杆 | 移动视角 |
++| B | 取消 / Escape |
++| X / Y | 第一个英雄 / 空闲工人 |
++| ＋ / － | 游戏菜单 / 任务 |
++| 十字键上 / 下 | 缩放 |
++| 十字键左 / 右 | 切换子组 / 快速镜头 |
++| 按下左 / 右摇杆 | 快速保存 / 截图 |
++| 触摸屏 | 沿用 SDL 触屏输入，待实机验证 |
+ 
+-Pre-built binaries and Flatpak bundles are available from the [latest release](https://github.com/corepunch/open-realm/releases/latest). CI artifacts are published by the [CI workflow](https://github.com/corepunch/open-realm/actions/workflows/c-cpp.yml). Neither releases nor CI artifacts contain retail assets.
++## 存档与故障信息
+ 
+-For Flatpak and Steam Deck packaging, see [Flatpak And Steam Deck Packaging](docs/flatpak-steam-deck.md).
++- 配置、战役进度、存档：`sd:/switch/openrealm/user/`
++- 日志：`sd:/switch/openrealm/openrealm.log`
++- 截图：`sd:/switch/openrealm/screenshots/`
++- 默认设置：1280×720、30 FPS 上限、垂直同步。这是初始设置，不代表已经实测达到 30 FPS。
+ 
+-## Build
++若发生黑屏或退出，请保留日志，并记录系统/Atmosphère 版本、使用的 MPQ 版本和触发步骤。
+ 
+-The native build requires a C compiler, `make`, SDL2, and system OpenGL (or GLES3 on supported Linux systems). MPQ loading and most format tooling are provided by vendored or in-tree code.
++## 已完成的检查
+ 
+-macOS:
++- devkitA64 / libnx / SDL2 / switch-mesa 原生交叉编译，静态链接完整引擎。
++- NSP 容器与内容文件摘要检查；NCA 解密及哈希验证。
++- 原生测试套件：33 份报告、6,949 个测试、0 个失败；Switch 手柄事件与文件系统适配器测试通过。
++- 未改动网络消息布局、实体/玩家状态或存档格式。
+ 
+-```bash
+-brew install sdl2
+-```
+-
+-Ubuntu/Debian:
+-
+-```bash
+-sudo apt-get install build-essential libsdl2-dev
+-```
+-
+-Windows builds use MSYS2/MinGW or Visual Studio with SDL2 development libraries.
+-
+-```bash
+-git clone https://github.com/corepunch/open-realm.git
+-cd open-realm
+-make build
+-```
+-
+-To include Warcraft III video playback and background music, install the FFmpeg development libraries and `pkg-config`, then build with:
+-
+-```bash
+-# Ubuntu/Debian
+-sudo apt-get install pkg-config libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
+-# Manjaro/Arch
+-sudo pacman -S --needed pkgconf ffmpeg
+-
+-make clean
+-make build -j4 FFMPEG=1
+-```
++## 尚未验证与限制
+ 
+-On macOS, install these dependencies with `brew install pkg-config ffmpeg`. Ordinary sound effects and unit voices work without `FFMPEG=1`. See [Pre-Rendered Movies](docs/games/warcraft-3/pre-rendered-movies.md).
++- 尚无 Switch 实机安装、GPU 渲染、地图加载、音频、存档恢复、休眠恢复的验证结果。
++- 此构建保留原生存档实现，但实机存档可靠性尚未验证。
++- 不含可选 FFmpeg，预渲染影片和依赖 FFmpeg 的背景音乐暂未启用；普通音效与语音代码已编入。
++- 联机、自定义大型地图、战役完整通关均未认证；会继承上游引擎的功能缺口。
++- 文件系统兼容层面向单实例、引擎线程串行保存，不支持其他进程同时修改其存档目录。
+ 
+-Useful targets:
+-
+-```bash
+-make openwarcraft3       # Warcraft III executable
+-make openwow             # World of Warcraft executable
+-make opensc2             # StarCraft II executable
+-make tools               # Asset/archive diagnostic tools
+-make test                # Generate fixtures and run tests
+-make test-ui             # Warcraft III UI parser/layout tests
+-```
+-
+-The default build is diagnostic. Select release mode and renderer settings with:
+-
+-```bash
+-make clean && make BUILD=release openwarcraft3
+-make clean && make BUILD=release GL_BACKEND=gles3 MSAA=0 openwarcraft3
+-```
+-
+-Supported settings are `BUILD=debug|release`, `GL_BACKEND=gl|gles3`, `MSAA=0|2|4|8`, and `GLSL=120|140|150`. Run `make clean` when changing these values. See [Build And Renderer Platforms](docs/build-and-renderer-platforms.md).
+-
+-## Run with game data
+-
+-Point the executable at a Warcraft III installation containing its MPQ archives:
+-
+-```bash
+-build/bin/openwarcraft3 -data "/path/to/Warcraft III"
+-```
++## 从源码构建
+ 
+-The directory is scanned for top-level MPQs and an optional loose `Maps/` directory. The Makefile also supports `WC3DATA`:
++使用 devkitPro 安装 `devkitA64 libnx switch-tools switch-sdl2 switch-mesa switch-zlib`，然后：
+ 
+-```bash
+-WC3DATA="/path/to/Warcraft III" make run
++```sh
++make font
++python3 port/switch/build.py
+ ```
+ 
+-Useful examples:
+-
+-```bash
+-build/bin/openwarcraft3 -data "/path/to/Warcraft III" +menu_main
+-build/bin/openwarcraft3 -data "/path/to/Warcraft III" +map 'Maps/Campaign/Orc01.w3m'
+-build/bin/openwarcraft3 -data "/path/to/Warcraft III" -vid_modes +com_frame_limit 10
+-```
+-
+-Open the in-game Quake-style console with backtick/tilde. Use `build/bin/mpqtool` to inspect archives:
+-
+-```bash
+-build/bin/mpqtool -mpq "/path/to/Warcraft III/War3.mpq" ls Maps/Campaign
+-```
+-
+-## Run on iPad
+-
+-The iPad build needs macOS with Xcode (for the iOS SDK, `xcrun`, and `devicectl`), CMake, and no Xcode project. SDL2 is downloaded and built automatically on first use.
+-
+-1. Connect the iPad by USB (or pair it over Wi-Fi in Xcode's *Devices and Simulators*), unlock it, and enable *Developer Mode* in Settings > Privacy & Security.
+-2. Make sure a development signing certificate and a matching iOS development provisioning profile for `com.openwarcraft3.warcraft3` (or a wildcard) are installed. Signing in to Xcode with your Apple ID and letting it create one for any app is enough.
+-3. Build, sign, install, and launch:
+-
+-```bash
+-make ipad-deploy
+-```
+-
+-With several devices attached, list them and pick one; pass `TEAM`, `PROFILE`, or `BUNDLE_ID` to override signing:
+-
+-```bash
+-make list-devices
+-make ipad-deploy DEVICE="iPad name or identifier" TEAM=ABCDE12345
+-```
+-
+-4. Copy `War3.mpq` and `War3Local.mpq` (plus `War3x.mpq`/`War3xLocal.mpq` for The Frozen Throne) into *On My iPad > OpenWarcraft3* with the Files app or Finder, then relaunch. Without them the app shows a "data not found" alert.
+-
+-The iPad must be unlocked for the launch step. `make ipad-run` does the same in an iPad simulator. See [packaging/ipad/README.md](packaging/ipad/README.md) for details.
+-
+-## Tests and diagnostics
+-
+-`make test` generates deterministic fixture archives under `build/tests/` and runs engine, parser, persistence, and format tests. For Warcraft III UI changes, run `make test-ui`. Useful tools include `mdxtool`, `maptool`, `m2tool`, `mpqtool`, `blp2jpg`, `blpgen`, and `mdxgen`. Bounded runtime diagnostics use `+com_frame_limit N`.
+-
+-## Documentation
+-
+-- [Architecture](ARCHITECTURE.md) — module boundaries and API contracts
+-- [Runtime configuration](docs/architecture/runtime.md) — paths, cvars, and startup order
+-- [Rendering scene workflow](docs/rendering-scene-workflow.md) — launching maps and model scenes
+-- [UI authoring](docs/ui-authoring.md) — FDF, bindings, and UI tests
+-- [WC3 gameplay documentation](docs/games/warcraft-3/gameplay-features.md)
+-- [Diagnostic tools](docs/diagnostic-tools.md)
+-- [Contributing](CONTRIBUTING.md)
+-
+-## License
++产物位于 `build/switch/`；`package/` 中包含 NSP 打包输入。打包使用私有的本地 keyset，
++不得把 keyset、原版资源或包含密钥的工具日志上传到仓库。GitHub Actions 只编译无密钥的 NRO/NSP 输入。
+ 
+-This project is licensed under the [MIT License](LICENSE).
++技术说明见 [Switch 移植文档](docs/platform/switch.md)，上游介绍见 [README.upstream.md](README.upstream.md)。
+diff --git a/README.upstream.md b/README.upstream.md
+new file mode 100644
+index 0000000..4ef6f40
+--- /dev/null
++++ b/README.upstream.md
+@@ -0,0 +1,165 @@
++<p align="center">
++  <img width="480" height="320" src="https://github.com/user-attachments/assets/e4491ef4-fa69-4efd-814f-f7335d4c448a" />
++</p>
++
++# OpenRealm
++
++OpenRealm is an open-source, Quake-style engine and compatibility project for Blizzard-era game data. Warcraft III is the primary playable target and runs on Windows, Linux, macOS, and iPad; StarCraft II and World of Warcraft provide additional format and renderer targets.
++
++[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE) [![CI](https://github.com/corepunch/open-realm/actions/workflows/c-cpp.yml/badge.svg)](https://github.com/corepunch/open-realm/actions/workflows/c-cpp.yml) [![Platform: Windows, Linux, macOS, iPadOS](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20iPadOS-lightgrey)](#run-on-ipad) [![Language: C](https://img.shields.io/badge/Language-C-blue.svg)](#) [![Discord](https://img.shields.io/badge/Discord-join-blue?logo=discord)](https://discord.gg/MxkUMWsKGs)
++
++The project does not include retail game data. Use it only with data you legally own. OpenRealm is not affiliated with Blizzard Entertainment.
++
++<p align="center">
++  <img src="docs/images/screenshot1.jpg" width="31%" style="margin-right:2%;" />
++  <img src="docs/images/screenshot3.jpg" width="31%" style="margin-right:2%;" />
++  <a href="https://youtu.be/EcuoDoOztjA">
++  <img src="docs/images/screenshot4.jpg" width="31%" />
++  </a>
++</p>
++
++## Current targets
++
++- **Warcraft III** — `openwarcraft3`, the main development target, including the client/server runtime, JASS, SLK/profile data, FDF UI, campaign flow, maps, fog, units, and networking. Also builds as an iPad app with touch controls (see [Run on iPad](#run-on-ipad)).
++- **World of Warcraft** — `openwow`, an exploratory M2/WMO/DBC/MPQ and UI target with a Lua-backed interface.
++- **StarCraft II** — `opensc2`, an exploratory M3/SC2Map/SC2Layout target.
++
++The shared runtime contains the client, server, renderer backend, networking, archive loading, console/cvars, sound, and math libraries. Game-specific code lives under `games/<game>/` and is connected through Quake 2-style import/export tables.
++
++## Download
++
++Pre-built binaries and Flatpak bundles are available from the [latest release](https://github.com/corepunch/open-realm/releases/latest). CI artifacts are published by the [CI workflow](https://github.com/corepunch/open-realm/actions/workflows/c-cpp.yml). Neither releases nor CI artifacts contain retail assets.
++
++For Flatpak and Steam Deck packaging, see [Flatpak And Steam Deck Packaging](docs/flatpak-steam-deck.md).
++
++## Build
++
++The native build requires a C compiler, `make`, SDL2, and system OpenGL (or GLES3 on supported Linux systems). MPQ loading and most format tooling are provided by vendored or in-tree code.
++
++macOS:
++
++```bash
++brew install sdl2
++```
++
++Ubuntu/Debian:
++
++```bash
++sudo apt-get install build-essential libsdl2-dev
++```
++
++Windows builds use MSYS2/MinGW or Visual Studio with SDL2 development libraries.
++
++```bash
++git clone https://github.com/corepunch/open-realm.git
++cd open-realm
++make build
++```
++
++To include Warcraft III video playback and background music, install the FFmpeg development libraries and `pkg-config`, then build with:
++
++```bash
++# Ubuntu/Debian
++sudo apt-get install pkg-config libavformat-dev libavcodec-dev libavutil-dev libswscale-dev libswresample-dev
++# Manjaro/Arch
++sudo pacman -S --needed pkgconf ffmpeg
++
++make clean
++make build -j4 FFMPEG=1
++```
++
++On macOS, install these dependencies with `brew install pkg-config ffmpeg`. Ordinary sound effects and unit voices work without `FFMPEG=1`. See [Pre-Rendered Movies](docs/games/warcraft-3/pre-rendered-movies.md).
++
++Useful targets:
++
++```bash
++make openwarcraft3       # Warcraft III executable
++make openwow             # World of Warcraft executable
++make opensc2             # StarCraft II executable
++make tools               # Asset/archive diagnostic tools
++make test                # Generate fixtures and run tests
++make test-ui             # Warcraft III UI parser/layout tests
++```
++
++The default build is diagnostic. Select release mode and renderer settings with:
++
++```bash
++make clean && make BUILD=release openwarcraft3
++make clean && make BUILD=release GL_BACKEND=gles3 MSAA=0 openwarcraft3
++```
++
++Supported settings are `BUILD=debug|release`, `GL_BACKEND=gl|gles3`, `MSAA=0|2|4|8`, and `GLSL=120|140|150`. Run `make clean` when changing these values. See [Build And Renderer Platforms](docs/build-and-renderer-platforms.md).
++
++## Run with game data
++
++Point the executable at a Warcraft III installation containing its MPQ archives:
++
++```bash
++build/bin/openwarcraft3 -data "/path/to/Warcraft III"
++```
++
++The directory is scanned for top-level MPQs and an optional loose `Maps/` directory. The Makefile also supports `WC3DATA`:
++
++```bash
++WC3DATA="/path/to/Warcraft III" make run
++```
++
++Useful examples:
++
++```bash
++build/bin/openwarcraft3 -data "/path/to/Warcraft III" +menu_main
++build/bin/openwarcraft3 -data "/path/to/Warcraft III" +map 'Maps/Campaign/Orc01.w3m'
++build/bin/openwarcraft3 -data "/path/to/Warcraft III" -vid_modes +com_frame_limit 10
++```
++
++Open the in-game Quake-style console with backtick/tilde. Use `build/bin/mpqtool` to inspect archives:
++
++```bash
++build/bin/mpqtool -mpq "/path/to/Warcraft III/War3.mpq" ls Maps/Campaign
++```
++
++## Run on Switch (experimental)
++
++See [Switch native preview](docs/platform/switch.md) for building NRO/NSP inputs,
++SD-card resource paths, controls, and hardware verification limits.
++
++## Run on iPad
++
++The iPad build needs macOS with Xcode (for the iOS SDK, `xcrun`, and `devicectl`), CMake, and no Xcode project. SDL2 is downloaded and built automatically on first use.
++
++1. Connect the iPad by USB (or pair it over Wi-Fi in Xcode's *Devices and Simulators*), unlock it, and enable *Developer Mode* in Settings > Privacy & Security.
++2. Make sure a development signing certificate and a matching iOS development provisioning profile for `com.openwarcraft3.warcraft3` (or a wildcard) are installed. Signing in to Xcode with your Apple ID and letting it create one for any app is enough.
++3. Build, sign, install, and launch:
++
++```bash
++make ipad-deploy
++```
++
++With several devices attached, list them and pick one; pass `TEAM`, `PROFILE`, or `BUNDLE_ID` to override signing:
++
++```bash
++make list-devices
++make ipad-deploy DEVICE="iPad name or identifier" TEAM=ABCDE12345
++```
++
++4. Copy `War3.mpq` and `War3Local.mpq` (plus `War3x.mpq`/`War3xLocal.mpq` for The Frozen Throne) into *On My iPad > OpenWarcraft3* with the Files app or Finder, then relaunch. Without them the app shows a "data not found" alert.
++
++The iPad must be unlocked for the launch step. `make ipad-run` does the same in an iPad simulator. See [packaging/ipad/README.md](packaging/ipad/README.md) for details.
++
++## Tests and diagnostics
++
++`make test` generates deterministic fixture archives under `build/tests/` and runs engine, parser, persistence, and format tests. For Warcraft III UI changes, run `make test-ui`. Useful tools include `mdxtool`, `maptool`, `m2tool`, `mpqtool`, `blp2jpg`, `blpgen`, and `mdxgen`. Bounded runtime diagnostics use `+com_frame_limit N`.
++
++## Documentation
++
++- [Architecture](ARCHITECTURE.md) — module boundaries and API contracts
++- [Runtime configuration](docs/architecture/runtime.md) — paths, cvars, and startup order
++- [Rendering scene workflow](docs/rendering-scene-workflow.md) — launching maps and model scenes
++- [UI authoring](docs/ui-authoring.md) — FDF, bindings, and UI tests
++- [WC3 gameplay documentation](docs/games/warcraft-3/gameplay-features.md)
++- [Diagnostic tools](docs/diagnostic-tools.md)
++- [Contributing](CONTRIBUTING.md)
++
++## License
++
++This project is licensed under the [MIT License](LICENSE).
+diff --git a/RELEASE.md b/RELEASE.md
+new file mode 100644
+index 0000000..513b75d
+--- /dev/null
++++ b/RELEASE.md
+@@ -0,0 +1,11 @@
++# OpenRealm Switch 0.1.0 Preview
++
++首个 Switch 原生移植测试包，包含完整应用 NSP 和备用 NRO。
++
++**尚未通过 Switch 实机验证。编译/文件完整性检查通过，不等于已经实机可玩。**
++
++将自行提供的 Classic MPQ 资源放到 `sd:/switch/openrealm/data/`。
++存档与配置在 `sd:/switch/openrealm/user/`，日志在 `sd:/switch/openrealm/openrealm.log`。
++
++普通音效/语音代码已编入；FFmpeg 影片和相关音乐功能暂未启用。
++安装步骤、按键和限制见仓库 README。所有下载均不包含 MPQ 游戏数据和密钥。
+diff --git a/client/cl_input.c b/client/cl_input.c
+index 1f7e9ad..327524f 100644
+--- a/client/cl_input.c
++++ b/client/cl_input.c
+@@ -1,3 +1,6 @@
++#ifdef __SWITCH__
++#include "port/switch/platform.h"
++#endif
+ #include "cl_input_local.h"
+ #include "cl_control_groups.h"
+ #include "ui_layout.h"
+@@ -642,6 +645,9 @@ bool CL_GameplayInputReady(void) {
+ }
+ 
+ void CL_Input(void) {
++#ifdef __SWITCH__
++    NX_PumpInput();
++#endif
+     SDL_Event event;
+     /* Hover is presentation-only; ray-pick the last eligible motion after draining SDL input. */
+     SDL_MouseMotionEvent hover_motion = { 0 };
+diff --git a/common/common.c b/common/common.c
+index e48c018..d01e384 100644
+--- a/common/common.c
++++ b/common/common.c
+@@ -30,11 +30,17 @@
+ 
+ #include <sys/stat.h>
+ #ifndef _WIN32
++#ifndef __SWITCH__
+ #include <sys/mman.h>
++#endif
+ #include <fcntl.h>
+ #include <unistd.h>
+ #endif
+ 
++#ifdef __SWITCH__
++#include "port/switch/fs.h"
++#endif
++
+ extern void Key_Init(void);
+ 
+ #define MAXPRINTMSG 4096
+@@ -1179,7 +1185,7 @@ void FS_FreeFile(void *buf) {
+  * The returned pointer must be released with FS_MunmapFile, NOT FS_FreeFile.
+  * Header layout: [size:uint32_t][fd:int][flags:uint32_t][padding][data...] so that
+  * FS_MunmapFile can munmap/close without a side-channel. */
+-#ifndef _WIN32
++#if !defined(_WIN32) && !defined(__SWITCH__)
+ #define MMAP_HDR_SIZE  16   /* must be >= 4+4+4 and page-aligned-friendly */
+ void *FS_MmapFile(cstring_t filename, uint32_t *out_size) {
+     FOR_LOOP(i, MAX_GAME_DIRS) {
+diff --git a/common/main.c b/common/main.c
+index 2651357..6aaf422 100644
+--- a/common/main.c
++++ b/common/main.c
+@@ -18,7 +18,9 @@
+ #include <unistd.h>
+ #endif
+ 
+-#if defined(__APPLE__)
++#if defined(__SWITCH__)
++#define BZ_PLATFORM "Switch"
++#elif defined(__APPLE__)
+ #define BZ_PLATFORM "Darwin"
+ #elif defined(_WIN32)
+ #define BZ_PLATFORM "Windows"
+@@ -243,6 +245,10 @@ static bool Sys_iOSHasWarcraftArchive(cstring_t dirname) {
+  * flat portable (share/ beside the exe), the FHS build tree (share/ beside
+  * bin/), and the in-tree CWD fallback. */
+ static void Sys_ResolveShareDirectory(void) {
++#ifdef __SWITCH__
++    FS_SetShareDirectory("romfs:/share");
++    return;
++#endif
+ #ifdef __EMSCRIPTEN__
+     FS_SetShareDirectory("/share");
+     return;
+@@ -263,6 +269,10 @@ static void Sys_ResolveShareDirectory(void) {
+ /* Resolve writable per-user game data: XDG_DATA_HOME (or ~/.local/share)
+  * on Unix, APPDATA on Windows. Only adopted if creatable and writable. */
+ static void Sys_ResolveHomeDirectory(void) {
++#ifdef __SWITCH__
++    FS_SetHomeDirectory("sdmc:/switch/openrealm/user");
++    return;
++#endif
+ #ifdef __EMSCRIPTEN__
+     FS_SetHomeDirectory("/openrealm/user");
+     return;
+diff --git a/common/script_save_impl.inc b/common/script_save_impl.inc
+index 53260df..e729de9 100644
+--- a/common/script_save_impl.inc
++++ b/common/script_save_impl.inc
+@@ -24,12 +24,16 @@ static bool FS_GenerateScriptScopeId(char out[33]) {
+     bool success = random && random(NULL, id, (unsigned long)sizeof(id), 2u) >= 0;
+     FreeLibrary(bcrypt);
+     if (!success) return false;
++#else
++#ifdef __SWITCH__
++    if (NX_Random(id, sizeof(id)) != 0) return false;
+ #else
+     FILE *random = fopen("/dev/urandom", "rb");
+     if (!random) return false;
+     bool success = fread(id, 1, sizeof(id), random) == sizeof(id);
+     fclose(random);
+     if (!success) return false;
++#endif
+ #endif
+     for (size_t i = 0; i < sizeof(id); ++i)
+         snprintf(out + i * 2, 3, "%02x", id[i]);
+diff --git a/docs/build-and-renderer-platforms.md b/docs/build-and-renderer-platforms.md
+index 0144a66..797c494 100644
+--- a/docs/build-and-renderer-platforms.md
++++ b/docs/build-and-renderer-platforms.md
+@@ -268,3 +268,8 @@ and model cleanup with intercepted GL buffer/VAO calls in `tests/test_renderer_m
+ The SPN fixture loads a real model through `R_LoadModelMDLX`; compiling the loader/buffer sources
+ separately bypasses those intercepts and crashes in macOS `glGenBuffers` without a current context.
+ Keep their test compilation inside the intercepted translation unit; production builds remain unchanged.
++
++## Switch preview
++
++See [Switch native build](platform/switch.md) for the opt-in libnx/GLES3 build,
++packaging inputs, input mapping and hardware verification limits.
+diff --git a/docs/platform/switch.md b/docs/platform/switch.md
+new file mode 100644
+index 0000000..52df4f4
+--- /dev/null
++++ b/docs/platform/switch.md
+@@ -0,0 +1,98 @@
++# Switch native preview
++
++This opt-in port builds the Warcraft III runtime for Horizon with devkitA64,
++libnx, SDL2 and switch-mesa. It is an experimental build: compilation and host
++checks do not establish Switch gameplay, graphics performance or save reliability.
++The upstream revision is `8853d069c21c94a981121066e1d78e967676fae4`.
++
++## Build and layout
++
++Install devkitA64, libnx, switch-tools, switch-sdl2, switch-mesa and switch-zlib
++with devkitPro's package manager. Build from the repository root:
++
++```sh
++make font
++python3 port/switch/build.py
++# Optional static Linux integration build with the same module topology:
++python3 port/switch/build.py --host --out build/switch-host
++```
++
++`build/switch/openrealm.nro` embeds project-owned defaults/fonts in RomFS.
++`build/switch/package` contains a native NSO executable, NPDM, NACP and RomFS
++for an application NSP. This is the real engine, not an NRO forwarder or graphics
++probe. No MPQs, retail models, textures, maps or keys are included.
++
++| Purpose | Runtime location |
++|---|---|
++| Read-only defaults and fonts | `romfs:/share/` |
++| User-supplied Classic MPQs and optional Maps directory | `sdmc:/switch/openrealm/data/` |
++| Writable config, progress and saves | `sdmc:/switch/openrealm/user/` |
++| Engine stderr log | `sdmc:/switch/openrealm/openrealm.log` |
++| Screenshots | `sdmc:/switch/openrealm/screenshots/` |
++
++Use full application mode (NSP or hbmenu title override). Album applet mode is
++rejected with an explanatory console screen. Missing War3.mpq produces a
++recoverable first-run screen. War3x.mpq selects TFT at startup; the existing menu
++edition control can switch modes. The platform launcher defaults to 1280x720,
++30 fps cap and vsync. These are conservative initial settings, not measured
++performance claims. Optional FFmpeg music/movie support is not compiled.
++
++## Module contract
++
++`port/switch/platform.c` owns libnx lifecycle and translates pad state into ordinary
++SDL mouse/key events before `CL_Input` drains the queue. It includes no engine
++or game headers, avoiding libnx/legacy engine type-name collisions. The game,
++menu, renderer, JASS and shared code remain separate compilation units in one
++static image. The existing `port/web/src/web_fdf_namespace.h` and renderer
++namespace adapter preserve module-local FDF/world state and MDX stream readers.
++Unlike the browser build, the Switch build retains the real `g_save.c`.
++
++The save filesystem adapter implements directory-relative operations with private
++directory descriptors over the path-based FAT API. It preserves real file
++descriptors for zlib and native saves, rejects symlinks and traversal components,
++and uses libnx randomGet instead of /dev/urandom. FAT advisory locks are not
++provided; saves run serially in one foreground application.
++
++Only platform guards in shared code select paths, the GLES headers, the input
++pump and a heap-read alternative to mmap. Network messages, entity/player state
++and the save format remain unchanged. The existing in-process loopback serves
++single-player; network availability is not certified by this port.
++
++## Controls
++
++| Control | Action |
++|---|---|
++| Left stick | Pointer |
++| L + left stick | Fine pointer movement |
++| A or ZR (hold to drag) | Left click / selection box |
++| R | Right click / smart order |
++| ZL | Shift modifier / queue orders |
++| Right stick | Camera scroll |
++| B | Escape / cancel |
++| X / Y | Hero 1 / idle worker |
++| Plus / Minus | In-game menu / quests |
++| D-pad up/down | Zoom |
++| D-pad left/right | Subgroup / quick camera |
++| Left stick click / right stick click | Quick save / engine screenshot |
++| Touchscreen | Existing SDL touch input |
++
++A and ZR are merged into one logical left button, so releasing one while the
++other is held does not end a drag. Stick camera keys emit transitions only,
++including key-up when returning to center. ZL updates SDL modifier state before
++mouse events, using existing shift-order logic.
++
++## Verification and known gaps
++
++`port/switch/tests/input.c` drives the production input adapter through SDL's real
++event queue with simulated libnx pad samples. It covers drag ownership, right
++click/Shift, camera press/release, menu press/release and application exit.
++It does not emulate Horizon, graphics, real Joy-Con hardware, or touchscreen.
++
++The next hardware acceptance is: install/launch, read MPQs, render menu, load a
++small map, select/drag/issue orders, hear audio, save/reload, exit/relaunch and
++resume from sleep. Collect the SD log and a screenshot if startup fails. Retail
++assets are required for that acceptance and must come from the user's installation.
++Do not label the preview hardware-tested without that evidence.
++
++See also [build platforms](../build-and-renderer-platforms.md) and
++[runtime paths](../architecture/runtime.md).
+diff --git a/port/switch/build.py b/port/switch/build.py
+new file mode 100755
+index 0000000..96510cb
+--- /dev/null
++++ b/port/switch/build.py
+@@ -0,0 +1,85 @@
++#!/usr/bin/env python3
++"""Build the real Warcraft III runtime as one libnx application, with native saves."""
++import argparse, importlib.util, os, pathlib, shutil, subprocess, json
++ROOT = pathlib.Path(__file__).resolve().parents[2]
++spec = importlib.util.spec_from_file_location('web_build', ROOT/'port/web/build-engine.py')
++web = importlib.util.module_from_spec(spec)
++spec.loader.exec_module(web)
++p = argparse.ArgumentParser()
++p.add_argument('--host', action='store_true', help='build static Linux executable for integration tests')
++p.add_argument('--debug', action='store_true')
++p.add_argument('--out', default='build/switch')
++a = p.parse_args()
++os.chdir(ROOT)
++out = (ROOT/a.out).resolve(); out.mkdir(parents=True, exist_ok=True)
++dkp = pathlib.Path(os.environ.get('DEVKITPRO', '/opt/devkitpro'))
++os.environ.setdefault('DEVKITPRO', str(dkp))
++cc = 'gcc' if a.host else str(dkp/'devkitA64/bin/aarch64-none-elf-gcc')
++wc3='games/warcraft-3'
++sources=web.sources
++modules={
++ 'shared':sources('shared',exclude=('test.c',))+[ROOT/'vendor/blast/blast.c'],
++ 'test_harness':[ROOT/'shared/test.c'],
++ 'jass':sources(wc3+'/jass'),
++ 'renderer':sources('renderer',wc3+'/renderer'),
++ 'game':sources(wc3+'/game'),
++ 'menu':sources(wc3+'/menu'),
++ 'wc3_common':sources(wc3+'/common',exclude=('world_w3.c',)),
++ 'engine':sources('client','server','common','sound',exclude=('stb_vorbis.c','sv_routing.c'))+[ROOT/wc3/'common/world_w3.c'],
++}
++flags=['-O0' if a.debug else '-O2','-g','-fno-common','-ffunction-sections','-fdata-sections','-D_GNU_SOURCE','-DSDL_MAIN_HANDLED',
++ '-I.','-Ishared','-Ishared/types','-I'+wc3,'-I'+wc3+'/common','-I'+wc3+'/game','-I'+wc3+'/game/api','-I'+wc3+'/game/skills',
++ '-DWC3','-DUSE_FOGOFWAR','-DBZ_GAME="warcraft-3"','-DBZ_GL_ES3','-DBZ_MSAA_SAMPLES=0','-DBZ_COMPAT_WORKAROUNDS=1']
++if a.host:
++ flags+=subprocess.check_output(['pkg-config','--cflags','sdl2','glesv2'],text=True).split()
++else:
++ flags+=['-fPIE','-march=armv8-a+crc+crypto','-mtune=cortex-a57','-mtp=soft','-D__SWITCH__','-I'+str(dkp/'portlibs/switch/include'),'-I'+str(dkp/'libnx/include')]
++
++def run(args):
++ print('+',' '.join(map(str,args)),flush=True)
++ subprocess.run(list(map(str,args)),check=True)
++
++def compile(name,files,extra=()):
++ unit=out/(name+'_unity.c');web.unity(unit, sorted(set(files)))
++ obj=out/(name+'.o')
++ # Incremental rebuild uses source mtimes and command identity; headers are included.
++ cmd=[cc,*flags,*extra,'-c',unit,'-o',obj]
++ stamp=out/(name+'.cmd')
++ newest=max(x.stat().st_mtime for x in [*files,*ROOT.rglob('*.h')])
++ if not obj.exists() or obj.stat().st_mtime<newest or not stamp.exists() or stamp.read_text()!=repr(cmd):
++  run(cmd);stamp.write_text(repr(cmd))
++ return obj
++objects=[]
++for name,files in modules.items():
++ extra=[]
++ if name in ('game','menu','engine'):extra+=['-DSTB_FDF_IMPLEMENTATION','-DSTB_FDF_GLOBALS']
++ if name=='engine':
++  extra+=['-DBZ_CLIENT_WORLD']
++  if not a.host:extra+=['-Dmain=OpenRealm_Main']
++ if name in ('game','menu'):extra+=['-include','port/web/src/web_fdf_namespace.h','-DBZ_WEB_FDF_'+name.upper()]
++ if name=='renderer':extra+=['-include','port/web/src/web_renderer_namespace.h']
++ objects.append(compile(name,files,extra))
++for name in ('parser','sheet'):objects.append(compile(name,[ROOT/wc3/'sheet'/(name+'.c')]))
++if a.host:
++ run([cc,*objects,'-Wl,--gc-sections',*subprocess.check_output(['pkg-config','--libs','sdl2','glesv2'],text=True).split(),'-lz','-lm','-o',out/'openwarcraft3'])
++else:
++ # Isolate libnx headers from the engine's legacy aliases.
++ objects.append(compile('platform',[ROOT/'port/switch/platform.c']))
++ objects.append(compile('filesystem',[ROOT/'port/switch/fs.c']))
++ run([cc,'-fPIE','-specs='+str(dkp/'libnx/switch.specs'),'-march=armv8-a+crc+crypto','-mtp=soft',*objects,
++  '-Wl,--gc-sections','-Wl,-Map,'+str(out/'openrealm.map'),
++  '-L'+str(dkp/'portlibs/switch/lib'),'-L'+str(dkp/'libnx/lib'),'-lSDL2','-lGLESv2','-lEGL','-lglapi','-ldrm_nouveau','-lstdc++','-lnx','-lz','-lm','-o',out/'openrealm.elf'])
++ tools=dkp/'tools/bin'
++ romfs=out/'romfs';shutil.copytree(ROOT/'share',romfs/'share',dirs_exist_ok=True)
++ shutil.copytree(ROOT/wc3/'share',romfs/'share/warcraft-3',dirs_exist_ok=True)
++ run([tools/'nacptool','--create','OpenRealm - Warcraft III','OpenRealm contributors','0.1.0',out/'control.nacp','--titleid=0100F34C524D0000'])
++ run([tools/'elf2nro',out/'openrealm.elf',out/'openrealm.nro','--nacp='+str(out/'control.nacp'),'--icon='+str(ROOT/'port/switch/icon.jpg'),'--romfsdir='+str(romfs)])
++ package=out/'package'
++ (package/'exefs').mkdir(parents=True,exist_ok=True);(package/'control').mkdir(exist_ok=True)
++ run([tools/'elf2nso',out/'openrealm.elf',package/'exefs/main'])
++ run([tools/'npdmtool',ROOT/'port/switch/npdm.json',package/'exefs/main.npdm'])
++ shutil.copy2(out/'control.nacp',package/'control/control.nacp')
++ for language in ('AmericanEnglish','Japanese','French','German','Italian','Spanish','Chinese','Korean','Dutch','Portuguese','Russian','Taiwanese','BritishEnglish','CanadianFrench','LatinAmericanSpanish','SimplifiedChinese','TraditionalChinese'):
++  shutil.copy2(ROOT/'port/switch/icon.jpg',package/('control/icon_'+language+'.dat'))
++ shutil.copytree(romfs,package/'romfs',dirs_exist_ok=True)
++ (out/'build-info.json').write_text(json.dumps({'upstream':'8853d069c21c94a981121066e1d78e967676fae4','hardwareTested':False,'retailDataIncluded':False},indent=2))
+diff --git a/port/switch/fs.c b/port/switch/fs.c
+new file mode 100644
+index 0000000..7475661
+--- /dev/null
++++ b/port/switch/fs.c
+@@ -0,0 +1,114 @@
++/* Directory-relative save storage for libnx's path-based FAT filesystem.
++ * Directory descriptors are private to the engine; file descriptors remain real. */
++#define NX_FS_IMPLEMENTATION
++#include "fs.h"
++#include <stdarg.h>
++#include <stdio.h>
++#include <string.h>
++#include <errno.h>
++#include <stdbool.h>
++#include <sys/file.h>
++
++#define NX_DIR_BASE 0x40000000 // descriptor base; disjoint from libnx device descriptors
++#define NX_DIR_SLOTS 128 // live directories; bounded save-tree traversal depth and scanners
++#define NX_PATH_MAX 1024 // bytes; SD root plus bounded script workspace components
++static char dirs[NX_DIR_SLOTS][NX_PATH_MAX];
++
++static char const *NX_DirPath(int fd) {
++    int slot = fd - NX_DIR_BASE;
++    if (slot < 0 || slot >= NX_DIR_SLOTS || !dirs[slot][0]) { errno = EBADF; return NULL; }
++    return dirs[slot];
++}
++
++/* Resolve relative names without changing global CWD or escaping the anchored directory. */
++static bool NX_PathAt(int fd, char const *path, char out[NX_PATH_MAX]) {
++    if (!path || !*path) { errno = ENOENT; return false; }
++    if (fd == AT_FDCWD || path[0] == '/' || strchr(path, ':')) {
++        if (snprintf(out,NX_PATH_MAX,"%s",path) >= NX_PATH_MAX) { errno = ENAMETOOLONG; return false; }
++        return true;
++    }
++    char const *base = NX_DirPath(fd);
++    if (!base) return false;
++    if (strstr(path,"..")) { errno = EACCES; return false; }
++    if (snprintf(out,NX_PATH_MAX,"%s/%s",base,path) >= NX_PATH_MAX) { errno = ENAMETOOLONG; return false; }
++    return true;
++}
++
++int NX_Open(char const *path, int flags, ...) {
++    mode_t mode = 0;
++    if (flags & O_CREAT) { va_list ap; va_start(ap,flags); mode = va_arg(ap,int); va_end(ap); }
++    struct stat st;
++    /* FAT has no symlinks; lstat also enforces the contract in host regression tests. */
++    if ((flags & O_NOFOLLOW) && !lstat(path,&st) && S_ISLNK(st.st_mode)) { errno = ELOOP; return -1; }
++    if (flags & O_DIRECTORY) {
++        if (stat(path,&st)) return -1;
++        if (!S_ISDIR(st.st_mode)) { errno = ENOTDIR; return -1; }
++        if (strlen(path) >= NX_PATH_MAX) { errno = ENAMETOOLONG; return -1; }
++        for (int i = 0; i < NX_DIR_SLOTS; i++) if (!dirs[i][0]) {
++            strcpy(dirs[i],path); return NX_DIR_BASE + i;
++        }
++        errno = EMFILE; return -1;
++    }
++    return open(path,flags & ~(O_NOFOLLOW | O_CLOEXEC),mode);
++}
++int NX_Close(int fd) {
++    if (fd < NX_DIR_BASE) return close(fd);
++    if (!NX_DirPath(fd)) return -1;
++    dirs[fd-NX_DIR_BASE][0] = 0; return 0;
++}
++int NX_Dup(int fd) {
++    if (fd < NX_DIR_BASE) return dup(fd);
++    char const *path = NX_DirPath(fd);
++    return path ? NX_Open(path,O_RDONLY|O_DIRECTORY) : -1;
++}
++int NX_Fstat(int fd, struct stat *st) {
++    if (fd < NX_DIR_BASE) return fstat(fd,st);
++    char const *path = NX_DirPath(fd);
++    return path ? stat(path,st) : -1;
++}
++int NX_OpenAt(int fd, char const *path, int flags, ...) {
++    mode_t mode = 0; char full[NX_PATH_MAX];
++    if (flags & O_CREAT) { va_list ap; va_start(ap,flags); mode = va_arg(ap,int); va_end(ap); }
++    return NX_PathAt(fd,path,full) ? NX_Open(full,flags,mode) : -1;
++}
++int NX_StatAt(int fd, char const *path, struct stat *st, int flags) {
++    char full[NX_PATH_MAX];
++    if (!NX_PathAt(fd,path,full)) return -1;
++    return flags & AT_SYMLINK_NOFOLLOW ? lstat(full,st) : stat(full,st);
++}
++int NX_MkdirAt(int fd, char const *path, mode_t mode) {
++    char full[NX_PATH_MAX]; return NX_PathAt(fd,path,full) ? mkdir(full,mode) : -1;
++}
++int NX_UnlinkAt(int fd, char const *path, int flags) {
++    char full[NX_PATH_MAX];
++    if (!NX_PathAt(fd,path,full)) return -1;
++    return flags & AT_REMOVEDIR ? rmdir(full) : unlink(full);
++}
++int NX_RenameAt(int from, char const *src, int to, char const *dst) {
++    char a[NX_PATH_MAX], b[NX_PATH_MAX];
++    return NX_PathAt(from,src,a) && NX_PathAt(to,dst,b) ? rename(a,b) : -1;
++}
++DIR *NX_FdOpenDir(int fd) {
++    char const *path = NX_DirPath(fd);
++    if (!path) return NULL;
++    DIR *dir = opendir(path);
++    if (dir) NX_Close(fd);
++    return dir;
++}
++/* Save storage runs synchronously on the engine thread, so no reader shares this offset. */
++ssize_t NX_Pread(int fd, void *buf, size_t size, off_t offset) {
++    off_t old = lseek(fd,0,SEEK_CUR);
++    if (old < 0 || lseek(fd,offset,SEEK_SET) < 0) return -1;
++    ssize_t count = read(fd,buf,size);
++    int saved = errno;
++    if (lseek(fd,old,SEEK_SET) < 0) return -1;
++    errno = saved; return count;
++}
++/* TODO: FAT has no advisory process locks. Save APIs run on one engine thread
++ * in one foreground application; external concurrent writers are unsupported. */
++int NX_Flock(int fd, int op) {
++    struct stat st;
++    if (fstat(fd,&st)) return -1;
++    if (op != LOCK_EX && op != LOCK_SH && op != LOCK_UN) { errno = EINVAL; return -1; }
++    return 0;
++}
+diff --git a/port/switch/fs.h b/port/switch/fs.h
+new file mode 100644
+index 0000000..8a8f6fc
+--- /dev/null
++++ b/port/switch/fs.h
+@@ -0,0 +1,36 @@
++#ifndef OPENREALM_SWITCH_FS_H
++#define OPENREALM_SWITCH_FS_H
++#include <sys/stat.h>
++#include <sys/types.h>
++#include <fcntl.h>
++#include <dirent.h>
++#include <unistd.h>
++#include <time.h>
++int NX_Open(char const *path, int flags, ...);
++int NX_Close(int fd);
++int NX_Dup(int fd);
++int NX_Fstat(int fd, struct stat *st);
++int NX_OpenAt(int fd, char const *path, int flags, ...);
++int NX_StatAt(int fd, char const *path, struct stat *st, int flags);
++int NX_MkdirAt(int fd, char const *path, mode_t mode);
++int NX_UnlinkAt(int fd, char const *path, int flags);
++int NX_RenameAt(int from, char const *src, int to, char const *dst);
++DIR *NX_FdOpenDir(int fd);
++ssize_t NX_Pread(int fd, void *buf, size_t size, off_t offset);
++int NX_Flock(int fd, int op);
++int NX_Random(void *buf, size_t size);
++#ifndef NX_FS_IMPLEMENTATION
++#define open NX_Open
++#define close NX_Close
++#define dup NX_Dup
++#define fstat NX_Fstat
++#define openat NX_OpenAt
++#define fstatat NX_StatAt
++#define mkdirat NX_MkdirAt
++#define unlinkat NX_UnlinkAt
++#define renameat NX_RenameAt
++#define fdopendir NX_FdOpenDir
++#define pread NX_Pread
++#define flock NX_Flock
++#endif
++#endif
+diff --git a/port/switch/icon.jpg b/port/switch/icon.jpg
+new file mode 100644
+index 0000000000000000000000000000000000000000..92e48f32b38d20c657f8178de821cdc7bbc5436c
+GIT binary patch
+literal 14536
+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
+Juiw<M{{h5qL~Z~8
+
+literal 0
+HcmV?d00001
+
+diff --git a/port/switch/npdm.json b/port/switch/npdm.json
+new file mode 100644
+index 0000000..30d0471
+--- /dev/null
++++ b/port/switch/npdm.json
+@@ -0,0 +1,186 @@
++{
++  "name": "openrealm",
++  "main_thread_stack_size": "0x400000",
++  "main_thread_priority": 44,
++  "default_cpu_id": 0,
++  "pool_partition": 0,
++  "is_64_bit": true,
++  "address_space_type": 1,
++  "is_retail": true,
++  "filesystem_access": {
++    "permissions": "0xFFFFFFFFFFFFFFFF",
++    "content_owner_ids": []
++  },
++  "service_host": [],
++  "service_access": [
++    "*"
++  ],
++  "kernel_capabilities": [
++    {
++      "type": "kernel_flags",
++      "value": {
++        "highest_thread_priority": 59,
++        "lowest_thread_priority": 28,
++        "highest_cpu_id": 2,
++        "lowest_cpu_id": 0
++      }
++    },
++    {
++      "type": "syscalls",
++      "value": {
++        "svcSetHeapSize": "0x01",
++        "svcSetMemoryPermission": "0x02",
++        "svcSetMemoryAttribute": "0x03",
++        "svcMapMemory": "0x04",
++        "svcUnmapMemory": "0x05",
++        "svcQueryMemory": "0x06",
++        "svcExitProcess": "0x07",
++        "svcCreateThread": "0x08",
++        "svcStartThread": "0x09",
++        "svcExitThread": "0x0A",
++        "svcSleepThread": "0x0B",
++        "svcGetThreadPriority": "0x0C",
++        "svcSetThreadPriority": "0x0D",
++        "svcGetThreadCoreMask": "0x0E",
++        "svcSetThreadCoreMask": "0x0F",
++        "svcGetCurrentProcessorNumber": "0x10",
++        "svcSignalEvent": "0x11",
++        "svcClearEvent": "0x12",
++        "svcMapSharedMemory": "0x13",
++        "svcUnmapSharedMemory": "0x14",
++        "svcCreateTransferMemory": "0x15",
++        "svcCloseHandle": "0x16",
++        "svcResetSignal": "0x17",
++        "svcWaitSynchronization": "0x18",
++        "svcCancelSynchronization": "0x19",
++        "svcArbitrateLock": "0x1A",
++        "svcArbitrateUnlock": "0x1B",
++        "svcWaitProcessWideKeyAtomic": "0x1C",
++        "svcSignalProcessWideKey": "0x1D",
++        "svcGetSystemTick": "0x1E",
++        "svcConnectToNamedPort": "0x1F",
++        "svcSendSyncRequestLight": "0x20",
++        "svcSendSyncRequest": "0x21",
++        "svcSendSyncRequestWithUserBuffer": "0x22",
++        "svcSendAsyncRequestWithUserBuffer": "0x23",
++        "svcGetProcessId": "0x24",
++        "svcGetThreadId": "0x25",
++        "svcBreak": "0x26",
++        "svcOutputDebugString": "0x27",
++        "svcReturnFromException": "0x28",
++        "svcGetInfo": "0x29",
++        "svcFlushEntireDataCache": "0x2A",
++        "svcFlushDataCache": "0x2B",
++        "svcMapPhysicalMemory": "0x2C",
++        "svcUnmapPhysicalMemory": "0x2D",
++        "svcGetDebugFutureThreadInfo": "0x2E",
++        "svcGetLastThreadInfo": "0x2F",
++        "svcGetResourceLimitLimitValue": "0x30",
++        "svcGetResourceLimitCurrentValue": "0x31",
++        "svcSetThreadActivity": "0x32",
++        "svcGetThreadContext3": "0x33",
++        "svcWaitForAddress": "0x34",
++        "svcSignalToAddress": "0x35",
++        "svcSynchronizePreemptionState": "0x36",
++        "svcGetResourceLimitPeakValue": "0x37",
++        "svcCreateIoPool": "0x39",
++        "svcCreateIoRegion": "0x3A",
++        "svcKernelDebug": "0x3C",
++        "svcChangeKernelTraceState": "0x3D",
++        "svcCreateSession": "0x40",
++        "svcAcceptSession": "0x41",
++        "svcReplyAndReceiveLight": "0x42",
++        "svcReplyAndReceive": "0x43",
++        "svcReplyAndReceiveWithUserBuffer": "0x44",
++        "svcCreateEvent": "0x45",
++        "svcMapIoRegion": "0x46",
++        "svcUnmapIoRegion": "0x47",
++        "svcMapPhysicalMemoryUnsafe": "0x48",
++        "svcUnmapPhysicalMemoryUnsafe": "0x49",
++        "svcSetUnsafeLimit": "0x4A",
++        "svcCreateCodeMemory": "0x4B",
++        "svcControlCodeMemory": "0x4C",
++        "svcSleepSystem": "0x4D",
++        "svcReadWriteRegister": "0x4E",
++        "svcSetProcessActivity": "0x4F",
++        "svcCreateSharedMemory": "0x50",
++        "svcMapTransferMemory": "0x51",
++        "svcUnmapTransferMemory": "0x52",
++        "svcCreateInterruptEvent": "0x53",
++        "svcQueryPhysicalAddress": "0x54",
++        "svcQueryIoMapping": "0x55",
++        "svcCreateDeviceAddressSpace": "0x56",
++        "svcAttachDeviceAddressSpace": "0x57",
++        "svcDetachDeviceAddressSpace": "0x58",
++        "svcMapDeviceAddressSpaceByForce": "0x59",
++        "svcMapDeviceAddressSpaceAligned": "0x5A",
++        "svcMapDeviceAddressSpace": "0x5B",
++        "svcUnmapDeviceAddressSpace": "0x5C",
++        "svcInvalidateProcessDataCache": "0x5D",
++        "svcStoreProcessDataCache": "0x5E",
++        "svcFlushProcessDataCache": "0x5F",
++        "svcDebugActiveProcess": "0x60",
++        "svcBreakDebugProcess": "0x61",
++        "svcTerminateDebugProcess": "0x62",
++        "svcGetDebugEvent": "0x63",
++        "svcContinueDebugEvent": "0x64",
++        "svcGetProcessList": "0x65",
++        "svcGetThreadList": "0x66",
++        "svcGetDebugThreadContext": "0x67",
++        "svcSetDebugThreadContext": "0x68",
++        "svcQueryDebugProcessMemory": "0x69",
++        "svcReadDebugProcessMemory": "0x6A",
++        "svcWriteDebugProcessMemory": "0x6B",
++        "svcSetHardwareBreakPoint": "0x6C",
++        "svcGetDebugThreadParam": "0x6D",
++        "svcGetSystemInfo": "0x6F",
++        "svcCreatePort": "0x70",
++        "svcManageNamedPort": "0x71",
++        "svcConnectToPort": "0x72",
++        "svcSetProcessMemoryPermission": "0x73",
++        "svcMapProcessMemory": "0x74",
++        "svcUnmapProcessMemory": "0x75",
++        "svcQueryProcessMemory": "0x76",
++        "svcMapProcessCodeMemory": "0x77",
++        "svcUnmapProcessCodeMemory": "0x78",
++        "svcCreateProcess": "0x79",
++        "svcStartProcess": "0x7A",
++        "svcTerminateProcess": "0x7B",
++        "svcGetProcessInfo": "0x7C",
++        "svcCreateResourceLimit": "0x7D",
++        "svcSetResourceLimitLimitValue": "0x7E",
++        "svcCallSecureMonitor": "0x7F"
++      }
++    },
++    {
++      "type": "application_type",
++      "value": 1
++    },
++    {
++      "type": "min_kernel_version",
++      "value": "0x30"
++    },
++    {
++      "type": "handle_table_size",
++      "value": 512
++    },
++    {
++      "type": "debug_flags",
++      "value": {
++        "allow_debug": false,
++        "force_debug_prod": false,
++        "force_debug": false
++      }
++    }
++  ],
++  "program_id": "0x0100F34C524D0000",
++  "program_id_range_min": "0x0100F34C524D0000",
++  "program_id_range_max": "0x0100F34C524D0000",
++  "system_resource_size": "0x0",
++  "version": "0x0",
++  "optimize_memory_allocation": false,
++  "disable_device_address_space_merge": false,
++  "enable_alias_region_extra_size": false,
++  "prevent_code_reads": false,
++  "signature_key_generation": 0
++}
+diff --git a/port/switch/platform.c b/port/switch/platform.c
+new file mode 100644
+index 0000000..7ddff8d
+--- /dev/null
++++ b/port/switch/platform.c
+@@ -0,0 +1,151 @@
++/* Horizon lifecycle and gamepad-to-SDL translation. No simulation state lives here. */
++#include <switch.h>
++#include <SDL2/SDL.h>
++#include <sys/stat.h>
++#include <dirent.h>
++#include <strings.h>
++#include <unistd.h>
++#include <errno.h>
++#include <math.h>
++#include <time.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include "platform.h"
++
++#define NX_DEADZONE 6000 // stick units; suppress drift on Joy-Con analog axes
++#define NX_CURSOR_SPEED 800.0f // pixels per second at full stick; 720p RTS pointer speed
++#define NX_PRECISE_SCALE 0.25f // multiplier while L is held; fine HUD targeting
++#define NX_FRAME_LIMIT 0.05f // seconds; avoid pointer jumps after suspend or blocking loads
++
++static PadState pad;
++static float cursor_x = 640, cursor_y = 360;
++static Uint32 previous;
++static u64 last_buttons;
++static bool cam_keys[4];
++extern int OpenRealm_Main(int argc, char **argv);
++
++/* Keep push-based engine input and bind dispatch unchanged. */
++static void NX_Key(SDL_Keycode key, bool down, SDL_Keymod mods) {
++    SDL_Event ev = {0};
++    ev.type = down ? SDL_KEYDOWN : SDL_KEYUP;
++    ev.key.timestamp = SDL_GetTicks();
++    ev.key.state = down ? SDL_PRESSED : SDL_RELEASED;
++    ev.key.keysym.sym = key;
++    ev.key.keysym.scancode = SDL_GetScancodeFromKey(key);
++    ev.key.keysym.mod = mods;
++    SDL_PushEvent(&ev);
++}
++
++static void NX_Mouse(int button, bool down) {
++    SDL_Event ev = {0};
++    ev.type = down ? SDL_MOUSEBUTTONDOWN : SDL_MOUSEBUTTONUP;
++    ev.button.timestamp = SDL_GetTicks();
++    ev.button.button = button;
++    ev.button.state = down ? SDL_PRESSED : SDL_RELEASED;
++    ev.button.clicks = 1;
++    ev.button.x = (int)cursor_x; ev.button.y = (int)cursor_y;
++    SDL_PushEvent(&ev);
++}
++
++/* Sample once before the engine drains events. Button releases retain press bindings. */
++void NX_PumpInput(void) {
++    if (!appletMainLoop()) {
++        SDL_Event ev = {.type = SDL_QUIT}; SDL_PushEvent(&ev); return;
++    }
++    padUpdate(&pad);
++    u64 held = padGetButtons(&pad), changed = held ^ last_buttons;
++    SDL_Keymod mods = (held & HidNpadButton_ZL) ? KMOD_LSHIFT : KMOD_NONE;
++    SDL_SetModState(mods);
++    HidAnalogStickState left = padGetStickPos(&pad, 0), right = padGetStickPos(&pad, 1);
++    Uint32 now = SDL_GetTicks();
++    float dt = previous ? fminf((now - previous) / 1000.0f, NX_FRAME_LIMIT) : 0;
++    previous = now;
++    SDL_Window *win = SDL_GetKeyboardFocus();
++    if (win) {
++        int w, h, mx, my; SDL_GetWindowSize(win, &w, &h); SDL_GetMouseState(&mx, &my);
++        cursor_x = mx; cursor_y = my;
++        float speed = NX_CURSOR_SPEED * dt * ((held & HidNpadButton_L) ? NX_PRECISE_SCALE : 1.0f);
++        float x = abs(left.x) > NX_DEADZONE ? (float)left.x / 32767 : 0;
++        float y = abs(left.y) > NX_DEADZONE ? (float)left.y / 32767 : 0;
++        cursor_x = fmaxf(0, fminf(w - 1, cursor_x + x * speed));
++        cursor_y = fmaxf(0, fminf(h - 1, cursor_y - y * speed));
++        if (x || y) SDL_WarpMouseInWindow(win, (int)cursor_x, (int)cursor_y);
++    }
++    /* A/ZR share one logical left button; releasing either cannot release the other. */
++    bool lnow = (held & (HidNpadButton_A | HidNpadButton_ZR)) != 0;
++    bool lwas = (last_buttons & (HidNpadButton_A | HidNpadButton_ZR)) != 0;
++    if (lnow != lwas) NX_Mouse(SDL_BUTTON_LEFT, lnow);
++    if (changed & HidNpadButton_R) NX_Mouse(SDL_BUTTON_RIGHT, (held & HidNpadButton_R) != 0);
++    static struct {u64 bit; SDL_Keycode key;} const keys[] = {
++        {HidNpadButton_B,SDLK_ESCAPE},{HidNpadButton_X,SDLK_F1},{HidNpadButton_Y,SDLK_F8},
++        {HidNpadButton_Plus,SDLK_F10},{HidNpadButton_Minus,SDLK_F9},
++        {HidNpadButton_Up,SDLK_PAGEUP},{HidNpadButton_Down,SDLK_PAGEDOWN},
++        {HidNpadButton_Left,SDLK_TAB},{HidNpadButton_Right,SDLK_SPACE},
++        {HidNpadButton_StickL,SDLK_F6},{HidNpadButton_StickR,SDLK_F12}
++    };
++    for (unsigned i = 0; i < sizeof(keys)/sizeof(keys[0]); i++)
++        if (changed & keys[i].bit) NX_Key(keys[i].key, (held & keys[i].bit) != 0, mods);
++    bool next[] = {right.x < -NX_DEADZONE,right.x > NX_DEADZONE,right.y > NX_DEADZONE,right.y < -NX_DEADZONE};
++    SDL_Keycode arrows[] = {SDLK_LEFT,SDLK_RIGHT,SDLK_UP,SDLK_DOWN};
++    for (int i = 0; i < 4; i++) {
++        if (next[i] != cam_keys[i]) NX_Key(arrows[i], next[i], KMOD_NONE);
++        cam_keys[i] = next[i];
++    }
++    last_buttons = held;
++}
++
++/* Match FAT case-insensitive names without assuming archive filename capitalization. */
++static bool NX_HasArchive(char const *name) {
++    DIR *dir = opendir("sdmc:/switch/openrealm/data");
++    if (!dir) return false;
++    struct dirent *entry; bool found = false;
++    while ((entry = readdir(dir))) if (!strcasecmp(entry->d_name, name)) { found = true; break; }
++    closedir(dir); return found;
++}
++
++/* Display a recoverable first-run screen instead of exiting without explanation. */
++static void NX_Error(char const *message) {
++    consoleInit(NULL);
++    printf("\x1b[2;2HOpenRealm / Warcraft III - Switch preview\n\n%s\n\n", message);
++    printf("Copy your original Classic MPQ files to:\n sd:/switch/openrealm/data/\n\nWar3.mpq + War3Local.mpq\nOptional: War3x.mpq + War3xLocal.mpq\n\nPress B to exit.\n");
++    while (appletMainLoop()) {
++        padUpdate(&pad);
++        if (padGetButtonsDown(&pad) & HidNpadButton_B) break;
++        consoleUpdate(NULL);
++    }
++    consoleExit(NULL);
++}
++
++int NX_Random(void *buf, size_t size) { randomGet(buf, size); return 0; }
++
++/* C11 time is only used by the optional engine test command. */
++int timespec_get(struct timespec *ts, int base) {
++    if (base != TIME_UTC || clock_gettime(CLOCK_REALTIME, ts)) return 0;
++    return base;
++}
++
++static void NX_Exit(void) { romfsExit(); }
++
++/* Application and NRO share the same embedded defaults and SD data/save contract. */
++int main(int argc, char **argv) {
++    padConfigureInput(1, HidNpadStyleSet_NpadStandard);
++    padInitializeDefault(&pad);
++    mkdir("sdmc:/switch",0777); mkdir("sdmc:/switch/openrealm",0777);
++    mkdir("sdmc:/switch/openrealm/data",0777); mkdir("sdmc:/switch/openrealm/user",0777);
++    if (appletGetAppletType() != AppletType_Application && appletGetAppletType() != AppletType_SystemApplication) {
++        NX_Error("Full application memory is required.\nUse the NSP or title override, not Album applet mode."); return 1;
++    }
++    if (R_FAILED(romfsInit())) { NX_Error("Embedded defaults could not be mounted."); return 1; }
++    atexit(NX_Exit);
++    if (!NX_HasArchive("war3.mpq")) { NX_Error("Warcraft III data not found."); return 1; }
++    freopen("sdmc:/switch/openrealm/openrealm.log","w",stderr); setvbuf(stderr,NULL,_IONBF,0);
++    chdir("sdmc:/switch/openrealm");
++    char *args[128] = {"openrealm","-data","sdmc:/switch/openrealm/data",NX_HasArchive("war3x.mpq") ? "-tft" : "-roc"};
++    int count = 4;
++    /* Preserve hbmenu arguments after defaults so explicit launch settings still work. */
++    for (int i = 1; i < argc && count < 110; i++) args[count++] = argv[i];
++    char *video[] = {"+set","com_maxfps","30","+set","r_vsync","1","+set","vid_native","0","+set","vid_mode","4"};
++    for (unsigned i = 0; i < sizeof(video)/sizeof(video[0]); i++) args[count++] = video[i];
++    args[count] = NULL;
++    return OpenRealm_Main(count,args);
++}
+diff --git a/port/switch/platform.h b/port/switch/platform.h
+new file mode 100644
+index 0000000..03172ba
+--- /dev/null
++++ b/port/switch/platform.h
+@@ -0,0 +1,5 @@
++#ifndef OPENREALM_SWITCH_PLATFORM_H
++#define OPENREALM_SWITCH_PLATFORM_H
++/* The platform adapter has no engine/game state; it emits ordinary SDL input. */
++void NX_PumpInput(void);
++#endif
+diff --git a/port/switch/tests/filesystem.c b/port/switch/tests/filesystem.c
+new file mode 100644
+index 0000000..494ddc7
+--- /dev/null
++++ b/port/switch/tests/filesystem.c
+@@ -0,0 +1,28 @@
++#define NX_FS_IMPLEMENTATION
++#include "../fs.h"
++#include <assert.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <errno.h>
++int main(void) {
++    char root[]="/tmp/openrealm-fs-XXXXXX"; assert(mkdtemp(root));
++    int fd=NX_Open(root,O_RDONLY|O_DIRECTORY);assert(fd>=0);
++    assert(NX_MkdirAt(fd,"live",0700)==0);
++    int sub=NX_OpenAt(fd,"live",O_RDONLY|O_DIRECTORY|O_NOFOLLOW);assert(sub>=0);
++    int file=NX_OpenAt(sub,"slot",O_RDWR|O_CREAT|O_EXCL,0600);assert(file>=0);
++    assert(write(file,"abcdef",6)==6);assert(lseek(file,2,SEEK_SET)==2);
++    char bytes[4]={0};assert(NX_Pread(file,bytes,3,1)==3);assert(!strcmp(bytes,"bcd"));
++    assert(lseek(file,0,SEEK_CUR)==2);assert(NX_Close(file)==0);
++    struct stat st;assert(NX_StatAt(sub,"slot",&st,AT_SYMLINK_NOFOLLOW)==0 && st.st_size==6);
++    int copy=NX_Dup(sub);assert(copy>=0);DIR *entries=NX_FdOpenDir(copy);assert(entries);assert(closedir(entries)==0);
++    errno=0;assert(NX_Fstat(copy,&st)==-1 && errno==EBADF);
++    assert(NX_RenameAt(sub,"slot",sub,"renamed")==0);
++    errno=0;assert(NX_OpenAt(sub,"../escape",O_CREAT|O_WRONLY,0600)==-1 && errno==EACCES);
++    char link[1024];snprintf(link,sizeof(link),"%s/live/link",root);assert(symlink("renamed",link)==0);
++    errno=0;assert(NX_OpenAt(sub,"link",O_RDONLY|O_NOFOLLOW)==-1 && errno==ELOOP);
++    assert(NX_UnlinkAt(sub,"link",0)==0);assert(NX_UnlinkAt(sub,"renamed",0)==0);
++    assert(NX_Close(sub)==0);assert(NX_UnlinkAt(fd,"live",AT_REMOVEDIR)==0);
++    assert(NX_Close(fd)==0);assert(rmdir(root)==0);
++    puts("Switch filesystem adapter: directory traversal, copy offsets, rename and cleanup passed");
++}
+diff --git a/port/switch/tests/input.c b/port/switch/tests/input.c
+new file mode 100644
+index 0000000..3623150
+--- /dev/null
++++ b/port/switch/tests/input.c
+@@ -0,0 +1,33 @@
++#include "switch.h"
++#include <SDL2/SDL.h>
++#include <assert.h>
++#include <stdio.h>
++#include "../platform.h"
++u64 test_buttons;
++HidAnalogStickState test_sticks[2];
++bool test_running = true;
++static int events(Uint32 type,int code) {
++    SDL_Event ev; int count=0;
++    while (SDL_PollEvent(&ev)) {
++        if (ev.type==type && (type==SDL_QUIT ||
++            ((type==SDL_KEYDOWN || type==SDL_KEYUP) ? ev.key.keysym.sym==code : ev.button.button==code))) count++;
++    }
++    return count;
++}
++int main(void) {
++    assert(SDL_Init(SDL_INIT_EVENTS|SDL_INIT_TIMER)==0);
++    test_buttons=HidNpadButton_A;NX_PumpInput();assert(events(SDL_MOUSEBUTTONDOWN,SDL_BUTTON_LEFT)==1);
++    test_buttons|=HidNpadButton_ZR;NX_PumpInput();assert(events(SDL_MOUSEBUTTONDOWN,SDL_BUTTON_LEFT)==0);
++    test_buttons=HidNpadButton_ZR;NX_PumpInput();assert(events(SDL_MOUSEBUTTONUP,SDL_BUTTON_LEFT)==0);
++    test_buttons=0;NX_PumpInput();assert(events(SDL_MOUSEBUTTONUP,SDL_BUTTON_LEFT)==1);
++    test_buttons=HidNpadButton_ZL|HidNpadButton_R;NX_PumpInput();assert(events(SDL_MOUSEBUTTONDOWN,SDL_BUTTON_RIGHT)==1);
++    assert(SDL_GetModState()&KMOD_LSHIFT);
++    test_buttons=0;NX_PumpInput();assert(events(SDL_MOUSEBUTTONUP,SDL_BUTTON_RIGHT)==1);assert(SDL_GetModState()==KMOD_NONE);
++    test_sticks[1].x=20000;NX_PumpInput();assert(events(SDL_KEYDOWN,SDLK_RIGHT)==1);
++    NX_PumpInput();assert(events(SDL_KEYDOWN,SDLK_RIGHT)==0);
++    test_sticks[1].x=0;NX_PumpInput();assert(events(SDL_KEYUP,SDLK_RIGHT)==1);
++    test_buttons=HidNpadButton_Plus;NX_PumpInput();assert(events(SDL_KEYDOWN,SDLK_F10)==1);
++    test_buttons=0;NX_PumpInput();assert(events(SDL_KEYUP,SDLK_F10)==1);
++    test_running=false;NX_PumpInput();assert(events(SDL_QUIT,0)==1);
++    SDL_Quit();puts("Switch input integration: 14 assertions passed");
++}
+diff --git a/port/switch/tests/switch.h b/port/switch/tests/switch.h
+new file mode 100644
+index 0000000..3817b66
+--- /dev/null
++++ b/port/switch/tests/switch.h
+@@ -0,0 +1,30 @@
++#ifndef TEST_SWITCH_H
++#define TEST_SWITCH_H
++#include <stdint.h>
++#include <stdbool.h>
++typedef uint64_t u64;
++typedef struct { int unused; } PadState;
++typedef struct { int x,y; } HidAnalogStickState;
++enum {HidNpadButton_A=1ULL<<0,HidNpadButton_B=1ULL<<1,HidNpadButton_X=1ULL<<2,HidNpadButton_Y=1ULL<<3,
++HidNpadButton_L=1ULL<<4,HidNpadButton_R=1ULL<<5,HidNpadButton_ZL=1ULL<<6,HidNpadButton_ZR=1ULL<<7,
++HidNpadButton_Plus=1ULL<<8,HidNpadButton_Minus=1ULL<<9,HidNpadButton_Up=1ULL<<10,HidNpadButton_Down=1ULL<<11,
++HidNpadButton_Left=1ULL<<12,HidNpadButton_Right=1ULL<<13,HidNpadButton_StickL=1ULL<<14,HidNpadButton_StickR=1ULL<<15};
++enum {HidNpadStyleSet_NpadStandard,AppletType_Application,AppletType_SystemApplication};
++extern u64 test_buttons;
++extern HidAnalogStickState test_sticks[2];
++extern bool test_running;
++static inline bool appletMainLoop(void){return test_running;}
++static inline void padUpdate(PadState *p){(void)p;}
++static inline u64 padGetButtons(PadState *p){(void)p;return test_buttons;}
++static inline u64 padGetButtonsDown(PadState *p){return padGetButtons(p);}
++static inline HidAnalogStickState padGetStickPos(PadState *p,int i){(void)p;return test_sticks[i];}
++static inline void padConfigureInput(int n,int s){(void)n;(void)s;}
++static inline void padInitializeDefault(PadState *p){(void)p;}
++static inline int appletGetAppletType(void){return AppletType_Application;}
++static inline int romfsInit(void){return 0;}
++static inline void romfsExit(void){}
++static inline void consoleInit(void *p){(void)p;}
++static inline void consoleExit(void *p){(void)p;}
++static inline void consoleUpdate(void *p){(void)p;}
++#define R_FAILED(x) ((x)!=0)
++#endif
+diff --git a/renderer/r_local.h b/renderer/r_local.h
+index 0d110ca..5ef183b 100644
+--- a/renderer/r_local.h
++++ b/renderer/r_local.h
+@@ -13,6 +13,8 @@
+ #else
+ #include <OpenGLES/ES3/gl.h>
+ #endif
++#elif defined(__SWITCH__)
++#include <GLES3/gl3.h>
+ #elif defined(__EMSCRIPTEN__)
+ #include <GLES3/gl3.h>
+ #elif __linux__ && defined(BZ_GL_ES3)
+diff --git a/renderer/r_main.c b/renderer/r_main.c
+index 51c3b68..75d2d75 100644
+--- a/renderer/r_main.c
++++ b/renderer/r_main.c
+@@ -23,7 +23,7 @@ extern void *objc_getClass(char const *name);
+ extern void *sel_registerName(char const *str);
+ extern void *objc_msgSend(void *, void *, ...);
+ #endif
+-#if !defined(__APPLE__) && !defined(__EMSCRIPTEN__)
++#if !defined(__APPLE__) && !defined(__EMSCRIPTEN__) && !defined(BZ_GL_ES3)
+ #include <SDL2/SDL_opengl.h>
+ #endif
+ 

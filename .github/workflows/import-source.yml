@@ -1,0 +1,25 @@
+name: Import pinned engine source
+on:
+  push:
+    paths: ['bootstrap/switch-port.patch', '.github/workflows/import-source.yml']
+permissions:
+  contents: write
+jobs:
+  import:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Fetch the pinned upstream and apply reviewed port
+        run: |
+          git clone https://github.com/corepunch/open-realm.git /tmp/openrealm-source
+          git -C /tmp/openrealm-source checkout --detach 8853d069c21c94a981121066e1d78e967676fae4
+          git -C /tmp/openrealm-source apply --check "$GITHUB_WORKSPACE/bootstrap/switch-port.patch"
+          git -C /tmp/openrealm-source apply "$GITHUB_WORKSPACE/bootstrap/switch-port.patch"
+          rsync -a --delete --exclude=.git --exclude=bootstrap --exclude=release-assets /tmp/openrealm-source/ ./
+      - name: Commit the full source tree
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m "Import pinned engine source and native Switch preview"
+          git push origin HEAD:main
