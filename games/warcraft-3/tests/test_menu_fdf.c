@@ -7,6 +7,7 @@
 #include "test.h"
 #include "common/ui_canvas.h"
 #include "common/common.h"
+#include "client/keys.h"
 #include "../menu/menu_local.h"
 #include "../renderer/mdx/r_mdx.h"
 #include "../menu/menu_dialog.h"
@@ -4187,16 +4188,16 @@ TEST(menu_fdf, custom_map_keyboard_selection_pages_and_bounds) {
         uiMapListState_t *state=list->MapListControl.State;T_NOT_NULL(state);
         if(state) {
             T_EQ(state->count,40);T_EQ(state->selected,0);
-            M_KeyEvent(SDLK_DOWN,0,true,1);T_EQ(state->selected,1);
-            M_KeyEvent(SDLK_DOWN,0,false,2);T_EQ(state->selected,1);
-            M_KeyEvent(SDLK_RIGHT,0,true,3);T_EQ(state->selected,15);
+            M_KeyEvent(K_DOWNARROW,0,true,1);T_EQ(state->selected,1);
+            M_KeyEvent(K_DOWNARROW,0,false,2);T_EQ(state->selected,1);
+            M_KeyEvent(K_RIGHTARROW,0,true,3);T_EQ(state->selected,15);
             T_ASSERT(state->scroll<=state->selected && state->selected<state->scroll+14);
-            M_KeyEvent(SDLK_END,0,true,4);T_EQ(state->selected,39);
-            M_KeyEvent(SDLK_DOWN,0,true,5);T_EQ(state->selected,39);
-            M_KeyEvent(SDLK_PAGEUP,0,true,6);T_EQ(state->selected,25);
-            M_KeyEvent(SDLK_HOME,0,true,7);T_EQ(state->selected,0);T_EQ(state->scroll,0);
-            M_KeyEvent(SDLK_LEFT,0,true,8);T_EQ(state->selected,0);
-            M_KeyEvent(SDLK_PAGEDOWN,0,true,9);T_EQ(state->selected,14);
+            M_KeyEvent(K_END,0,true,4);T_EQ(state->selected,39);
+            M_KeyEvent(K_DOWNARROW,0,true,5);T_EQ(state->selected,39);
+            M_KeyEvent(K_PAGEUP,0,true,6);T_EQ(state->selected,25);
+            M_KeyEvent(K_HOME,0,true,7);T_EQ(state->selected,0);T_EQ(state->scroll,0);
+            M_KeyEvent(K_LEFTARROW,0,true,8);T_EQ(state->selected,0);
+            M_KeyEvent(K_PAGEDOWN,0,true,9);T_EQ(state->selected,14);
         }
     }
     Cmd_ExecuteString("menu_ingame");mi=saved;
@@ -4230,7 +4231,7 @@ TEST(menu_fdf, map_browser_reload_rebinds_controls_and_preview_is_not_polled_per
         Cmd_ExecuteString("menu_single_player_skirmish");test_glue_tick(1000);
         frameDef_t *list=UI_FindChildFrame(UI_FindFrame("LocalMultiplayerCreate"),"MapListBox");
         T_NOT_NULL(list);
-        if(list) {T_EQ(list->MapListControl.State->count,40);M_KeyEvent(SDLK_DOWN,0,true,0);T_EQ(list->MapListControl.State->selected,1);}
+        if(list) {T_EQ(list->MapListControl.State->count,40);M_KeyEvent(K_DOWNARROW,0,true,0);T_EQ(list->MapListControl.State->selected,1);}
         uint32_t reads=map_reads;test_glue_tick(33);test_glue_tick(33);T_EQ(map_reads,reads);
         M_ShowGameSetupMenu();test_glue_tick(0);
         T_NOT_NULL(UI_FindFrame("CreateGamePlayerSlot0"));
@@ -4246,10 +4247,38 @@ TEST(menu_fdf, map_browser_reload_rebinds_controls_and_preview_is_not_polled_per
     }
     mi=saved;
 }
-TEST(menu_fdf, home_shows_application_version_when_supplied) {
+TEST(menu_fdf, home_has_no_application_version_or_author_overlay) {
     menuImport_t saved=mi;test_glue_setup();test_app_version="Switch 0.1.6 - XiaoFan";
     Cmd_ExecuteString("menu_main");test_glue_tick(1000);
     frameDef_t *label=UI_FindChildFrame(UI_FindFrame("MainMenuFrame"),"ApplicationVersion");
-    T_NOT_NULL(label);if(label)T_STREQ(label->Text,test_app_version);
+    T_NULL(label);
     Cmd_ExecuteString("menu_ingame");test_app_version=NULL;mi=saved;
+}
+
+TEST(menu_fdf, map_list_drag_scrolls_without_selecting_and_release_outside_stops_capture) {
+    reset_ui_state();mi.Cmd_ExecuteText=test_cmd_execute_text;
+    parse_fdf("drag_map_list.fdf",
+        "Frame \"FRAME\" \"Root\" { Width 0.8, Height 0.6,"
+        " Frame \"CONTROL\" \"MapListBox\" { Width 0.3, Height 0.1,"
+        " SetPoint TOPLEFT, \"Root\", TOPLEFT, 0.1, -0.1, } }");
+    frameDef_t *root=UI_FindFrame("Root"), *list=UI_FindFrame("MapListBox");
+    uiMapListState_t state={.count=40};
+    UI_BindMapList(list,&state,NULL,4,"test_map_list_select %u");UI_DrawFrame(root);
+    captured_command[0]=0;
+    M_MouseEvent(MENU_MOUSE_DOWN,188,210,1,0);
+    M_MouseEvent(MENU_MOUSE_MOVE,188,144,0,0);
+    T_ASSERT(state.scroll>=2);T_EQ(state.selected,0);
+    M_MouseEvent(MENU_MOUSE_UP,188,144,1,0);
+    T_STREQ(captured_command,"");
+    M_MouseEvent(MENU_MOUSE_DOWN,188,144,1,0);
+    M_MouseEvent(MENU_MOUSE_MOVE,188,-1000,0,0);
+    T_EQ(state.scroll,36);
+    M_MouseEvent(MENU_MOUSE_UP,188,-1000,1,0);
+    M_MouseEvent(MENU_MOUSE_MOVE,188,300,0,0);T_EQ(state.scroll,36);
+    M_MouseEvent(MENU_MOUSE_DOWN,188,144,1,0);
+    M_MouseEvent(MENU_MOUSE_MOVE,188,2000,0,0);
+    T_EQ(state.scroll,0);M_MouseEvent(MENU_MOUSE_UP,188,2000,1,0);
+    M_MouseEvent(MENU_MOUSE_DOWN,188,144,1,0);
+    M_MouseEvent(MENU_MOUSE_UP,188,144,1,0);
+    T_STREQ(captured_command,"test_map_list_select 0");
 }

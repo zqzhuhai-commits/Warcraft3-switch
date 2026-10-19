@@ -15,6 +15,7 @@
 #endif
 
 #include "../menu_local.h"
+#include "client/keys.h"
 #include "../menu_screen.h"
 #include "../generated/local_multiplayer_join.h"
 #include "../generated/local_multiplayer_create.h"
@@ -788,11 +789,12 @@ static void LANJoin_KeyEvent(int key, bool down) {
     }
     if(!list->count) return;
     int next=(int)list->selected;
+    /* Key_Event passes compact engine keys, not SDL scancode-masked symbols. */
     switch(key) {
-        case SDLK_UP:next--;break;case SDLK_DOWN:next++;break;
-        case SDLK_LEFT:case SDLK_PAGEUP:next-=page;break;
-        case SDLK_RIGHT:case SDLK_PAGEDOWN:next+=page;break;
-        case SDLK_HOME:next=0;break;case SDLK_END:next=list->count-1;break;
+        case K_UPARROW:next--;break;case K_DOWNARROW:next++;break;
+        case K_LEFTARROW:case K_PAGEUP:next-=page;break;
+        case K_RIGHTARROW:case K_PAGEDOWN:next+=page;break;
+        case K_HOME:next=0;break;case K_END:next=list->count-1;break;
         case SDLK_RETURN:case SDLK_KP_ENTER:
             UI_QueueCommand(lan.mode==LAN_MODE_BROWSER ? "menu_lan_join" : "menu_lan_start");return;
         default:return;

@@ -1,10 +1,10 @@
 {
-  "nspSize": 7143128,
-  "sha256": "fb58d72f7355b8c9944cd0060e78c4be4ffb0a8958abbb59d0f278a37e3bcd1e",
+  "nspSize": 7142616,
+  "sha256": "1c53a2d9973b9e2927f731271ec5467bb4afa4b85344ed0bfbacca0d4da2e7f4",
   "containerEntries": [
     {
-      "file": "43aec18c47b36ddbdbc91e4ba47c5897.nca",
-      "size": 5595648,
+      "file": "87c985d565d3ef153fa5f52c60625d1f.nca",
+      "size": 5595136,
       "hashChecks": [
         "Superblock Hash (GOOD)",
         "Hash Table (GOOD)",
@@ -14,7 +14,7 @@
       "toolExit": 0
     },
     {
-      "file": "a4cfc23aeab20768c4c09686caf6d3f3.cnmt.nca",
+      "file": "29243b405e00690e711941d56f868a10.cnmt.nca",
       "size": 4096,
       "hashChecks": [
         "Superblock Hash (GOOD)",
@@ -24,7 +24,7 @@
       "toolExit": 0
     },
     {
-      "file": "5af74067b9f6d4d52605e74f0b911ea7.nca",
+      "file": "977b16483013077cf98e67ca6c6f05b8.nca",
       "size": 1543168,
       "hashChecks": [
         "Superblock Hash (GOOD)"
@@ -35,10 +35,10 @@
   ],
   "hardwareTested": false,
   "retailDataIncluded": false,
-  "version": "0.1.6",
+  "version": "0.1.7",
   "title": "魔兽争霸3冰封王座",
   "author": "小帆",
-  "contentVersion": 393216,
+  "contentVersion": 458752,
   "nsoHashChecks": [
     ".text   (GOOD)",
     ".rodata (GOOD)",
@@ -49,14 +49,17 @@
   "packagedExecutableMatchesBuild": true,
   "productionSourceMatchesBuild": true,
   "customBlackMapsReproduced": false,
+  "regressions": {
+    "mapDirectionKeys": "engine K_* constants after SDL conversion",
+    "mapListDrag": "scroll, clamp, release outside, no accidental row click",
+    "homepageOverlay": "absent even when old version cvar is present"
+  },
   "checks": {
     "switchCrossCompile": "passed",
-    "menuDebug": "118 tests, 1579 assertions passed",
-    "menuOptimized": "118 tests, 1579 assertions passed",
-    "clientCamera": "passed",
+    "menuDebug": "119 tests, 1586 assertions passed",
+    "menuOptimized": "119 tests, 1586 assertions passed",
+    "sdlMenuNavigationRouting": "passed",
     "warcraftEngine": "8 variants, 703 tests per variant passed",
-    "rendererModelTerrain": "183 tests, 9105 assertions passed",
-    "font": "3 tests, 43 assertions passed",
     "switchInputTouchKeyboard": "passed",
     "desktopWarcraftWowSc2Builds": "passed",
     "fullMakeTest": "blocked by pre-existing test-linux-media-release QA: upstream release.yml absent"

@@ -1765,12 +1765,13 @@ TEST(client_input, hover_trace_coalesces_mouse_motion_in_input_pump) {
 }
 
 /* Keep the SDL queue, key binding, layout hit test and command buffer in the regression path. */
-static uint32_t test_menu_mouse, test_menu_text, test_menu_keys;
+static uint32_t test_menu_mouse, test_menu_text, test_menu_keys, test_menu_nav_keys;
 static bool CL_TestMenuMouse(menuMouseEvent_t event, int x, int y, int32_t param, uint32_t mods) {
     (void)event; (void)x; (void)y; (void)param; (void)mods; test_menu_mouse++; return false;
 }
 static void CL_TestMenuText(cstring_t text) { (void)text; test_menu_text++; }
-static void CL_TestMenuKey(int key, uint32_t mods, bool down, uint32_t time) { (void)key; (void)mods; (void)down; (void)time; test_menu_keys++; }
+static void CL_TestMenuKey(int key, uint32_t mods, bool down, uint32_t time) { (void)mods; (void)down; (void)time; test_menu_keys++;
+    if (key == K_DOWNARROW || key == K_PAGEDOWN) test_menu_nav_keys++; }
 TEST(client_input, menu_sdl_input_is_exclusive_with_world_presentation) {
     struct client_state *old = MemAlloc(sizeof(cl));
     struct client_static old_cls = cls;
@@ -1786,6 +1787,10 @@ TEST(client_input, menu_sdl_input_is_exclusive_with_world_presentation) {
         { .wheel = { .type = SDL_MOUSEWHEEL, .y = 1 } },
         { .text = { .type = SDL_TEXTINPUT, .text = "test" } },
         { .key = { .type = SDL_KEYDOWN, .keysym.sym = SDLK_F12 } },
+        { .key = { .type = SDL_KEYDOWN, .keysym.sym = SDLK_DOWN } },
+        { .key = { .type = SDL_KEYUP, .keysym.sym = SDLK_DOWN } },
+        { .key = { .type = SDL_KEYDOWN, .keysym.sym = SDLK_PAGEDOWN, .repeat = 1 } },
+        { .key = { .type = SDL_KEYUP, .keysym.sym = SDLK_PAGEDOWN } },
     };
     memcpy(old, &cl, sizeof(cl)); memset(&cl, 0, sizeof(cl));
     input = (__typeof__(input)){0}; cls.key_dest = key_menu;
@@ -1795,7 +1800,7 @@ TEST(client_input, menu_sdl_input_is_exclusive_with_world_presentation) {
     strlcpy(key_bind, Key_GetBinding(K_F12, 0), sizeof(key_bind));
     Key_SetBinding(K_MOUSE1, 0, ""); Key_SetBinding(K_F12, 0, "");
     T_EQ(SDL_InitSubSystem(SDL_INIT_EVENTS), 0);
-    test_menu_mouse = test_menu_text = test_menu_keys = 0;
+    test_menu_mouse = test_menu_text = test_menu_keys = test_menu_nav_keys = 0;
     FOR_LOOP(mode, 3) {
         cls.state = mode == 0 ? ca_active : mode == 1 ? ca_connected : ca_disconnected;
         cl.playerstate.client_ui_state = mode == 1 ? CLIENT_UI_LOADING : CLIENT_UI_GAME;
@@ -1805,6 +1810,7 @@ TEST(client_input, menu_sdl_input_is_exclusive_with_world_presentation) {
             T_EQ(test_menu_mouse, 0); T_EQ(test_menu_text, 0); T_EQ(test_menu_keys, 0);
         } else {
             T_EQ(test_menu_mouse, 4); T_EQ(test_menu_text, 1); T_ASSERT(test_menu_keys > 0);
+            T_EQ(test_menu_nav_keys, 4);
         }
     }
     SDL_QuitSubSystem(SDL_INIT_EVENTS);

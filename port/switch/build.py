@@ -74,7 +74,7 @@ else:
  tools=dkp/'tools/bin'
  romfs=out/'romfs';shutil.copytree(ROOT/'share',romfs/'share',dirs_exist_ok=True)
  shutil.copytree(ROOT/wc3/'share',romfs/'share/warcraft-3',dirs_exist_ok=True)
- run([tools/'nacptool','--create','魔兽争霸3冰封王座','小帆','0.1.6',out/'control.nacp','--titleid=0100F34C524D0000'])
+ run([tools/'nacptool','--create','魔兽争霸3冰封王座','小帆','0.1.7',out/'control.nacp','--titleid=0100F34C524D0000'])
  # Older nacptool versions fill only the first 12 language records.
  nacp=out/'control.nacp';metadata=bytearray(nacp.read_bytes())
  for language in range(16):metadata[language*0x300:(language+1)*0x300]=metadata[:0x300]

@@ -10,9 +10,9 @@ These are display metadata; the upstream MIT attribution remains in source.
 Package files use `魔兽争霸3冰封王座-Switch-<version>.nsp` / `.nro`.
 The internal NPDM process name is `warcraft3`.
 For versioned replacement, run `python3 port/switch/patch-hacbrewpack.py /path/to/hacBrewPack`
-and rebuild that tool. `package.py` sets `HACBREWPACK_TITLE_VERSION=393216`
+and rebuild that tool. `package.py` sets `HACBREWPACK_TITLE_VERSION=458752`
 (application version 6; earlier preview packages used CNMT version 0).
-The NACP display version is 0.1.6. Existing folders created by the system or
+The NACP display version is 0.1.7. Existing folders created by the system or
 other file managers are not automatically renamed by changing the NACP.
 The build fills all 16 NACP language records and enables their language mask,
 because older nacptool versions initialize only 12 records.
@@ -222,14 +222,7 @@ map info anchors replace authored anchors rather than accumulating opposing
 points, which had erased explicit widths. Column widths follow the container,
 and long descriptions use a clipped custom draw inside their allocated box.
 
-The homepage version is supplied by `ui_app_version` from the launcher; it is
-an application version, not a claim to emulate a particular retail patch.
-Map reader/parser code has no 4MiB cutoff. Terrain bounds validate 7 stored bytes
-per corner with 64-bit arithmetic before allocating, and tolerate payloads over
-4MiB. This does not establish compatibility of arbitrary large custom maps.
-Logs include archive bytes, W3I/editor/game versions and terrain dimensions;
-Lua-map detection warns explicitly. Specific black maps still require a map
-and runtime log to identify script, visibility, resource or rendering faults.
+The homepage no longer creates an application version/author overlay (0.1.7). NACP metadata still carries the application version and author.
 
 New tests cover map keyboard paging/bounds, repeated template reload, no preview
 reread on unchanged frames, homepage version, analog direction ownership,
@@ -239,3 +232,29 @@ failure because this Switch repository intentionally lacks upstream
 `.github/workflows/release.yml` required by `test-linux-media-release`.
 Relevant runtime suites are run separately; do not count that QA failure as
 an engine regression or silently claim the default full target passed.
+
+
+## 0.1.7 map-list input contract
+
+`NX_Key` emits SDL key symbols, but `CL_Input` translates them with
+`CL_SDLKeyToKeyCode` before `Key_Event` forwards them to `menu.KeyEvent`.
+The menu receives `K_DOWNARROW` (141), not `SDLK_DOWN` (1073741905).
+`LANJoin_KeyEvent` must use `client/keys.h` navigation constants, as the shared
+text editor already does. The old menu test bypassed this boundary by sending
+SDL symbols directly and passed while actual D-pad input failed. Menu regressions
+now use the engine keys; the client SDL queue test asserts the corresponding
+navigation codes, including repeat events. Switch adapter tests cover D-pad
+mode/repeat emission. Do not change the shared engine key contract to fix a screen.
+
+`M_MouseEvent` captures a map-list left press, including descendants, and computes
+row displacement from FDF-space pointer travel. Moving half a row starts scrolling;
+scroll is clamped to `count - VisibleRows`. It follows the pointer outside the list
+and consumes the drag release so a swipe cannot select a row. A tap still follows
+the ordinary select command path. Screen changes, inactive menus and input gating
+clear capture. This uses the existing Switch touch-to-left-drag adapter and also
+supports mouse dragging on desktop. No wire or save format changes.
+
+Validation: `make test-menu` (debug and optimized), `sh port/switch/tests/run-input.sh`,
+`make test-wc3-engine`, native host build and Switch cross-compile. Full `make test`
+continues to report the unrelated missing upstream Linux release workflow QA noted
+above; do not report the entire umbrella suite as passing.

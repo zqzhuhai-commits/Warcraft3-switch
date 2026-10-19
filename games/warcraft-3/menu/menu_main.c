@@ -130,6 +130,8 @@ static const menucommand_t menu_commands[] = {
 /* A press cannot survive a transition to a different screen. */
 static frameDef_t const *menu_pressed_frame;
 static bool menu_popup_pressed;
+/* Capture belongs to the menu lifecycle; a swipe must not activate a row on release. */
+static struct { frameDef_t const *frame; float y, scroll; bool moved; } menu_map_drag;
 
 /* Resolve resources before changing presentation; failure leaves the old screen intact. */
 static bool UI_LoadScreen(uiScreen_t *screen) {
@@ -163,6 +165,7 @@ static void UI_InstallScreen(uiScreen_t *screen) {
     ui_current_screen = screen;
     menu_pressed_frame = NULL;
     menu_popup_pressed = false;
+    menu_map_drag.frame = NULL;
     UI_UpdateMenuMusic(screen);
 }
 
@@ -332,6 +335,7 @@ static void UI_ClearScreen(void) {
     ui_state.transition_action = NULL;
     ui_state.configure = NULL;
     UI_ResetGlueTransitions();
+    menu_map_drag.frame = NULL;
     UI_InstallScreen(NULL);
 }
 
@@ -415,6 +419,7 @@ void M_Shutdown(void) {
 
 void M_SetActive(bool active) {
     ui_state.active = active;
+    if (!active) menu_map_drag.frame = NULL;
 }
 
 uint32_t M_Time(void) {
@@ -508,12 +513,38 @@ bool M_MouseEvent(menuMouseEvent_t event, int x, int y, int32_t param, uint32_t 
         (ui_state.initialized && !UI_GetCurrentScreen())) {
         menu_pressed_frame = NULL;
         menu_popup_pressed = false;
+        menu_map_drag.frame = NULL;
         return false;
     }
 
     vec2_t fdf = UI_PixelToFdf(x, y);
     ui_state.mouse_fdf = fdf;
     frameDef_t const *hit = UI_HitTest(fdf.x, fdf.y);
+    /* Drag the captured list even outside its bounds, then consume the release without a click. */
+    if (down && left) {
+        frameDef_t const *list = hit;
+        while (list && !list->MapListControl.State) list = list->Parent;
+        menu_map_drag.frame = UI_HasActivePopup() ? NULL : list;
+        menu_map_drag.y = fdf.y;
+        menu_map_drag.scroll = list ? list->MapListControl.State->visualScroll : 0;
+        menu_map_drag.moved = false;
+    }
+    if (menu_map_drag.frame && (event == MENU_MOUSE_MOVE || (up && left))) {
+        uiMapListControl_t const *control = &menu_map_drag.frame->MapListControl;
+        uiMapListState_t *state = control->State;
+        float row = control->RowHeight > 0 ? control->RowHeight : 0.019f;
+        float delta = (menu_map_drag.y - fdf.y) / row;
+        if (fabsf(delta) >= 0.5f) menu_map_drag.moved = true;
+        bool moved = menu_map_drag.moved;
+        if (moved) {
+            float limit = state->count > control->VisibleRows ? state->count - control->VisibleRows : 0;
+            state->visualScroll = MAX(0, MIN(limit, menu_map_drag.scroll + delta));
+            state->scroll = (uint32_t)roundf(state->visualScroll);
+            menu_pressed_frame = NULL;
+        }
+        if (up && left) menu_map_drag.frame = NULL;
+        if (moved) { UI_UpdateMouseFrameFlags(NULL, true); return true; }
+    }
     /* The render module owns edit dragging even after the pointer leaves its frame. */
     UI_EditDragEvent(event, fdf.x, param, mods);
     if (down && left) {

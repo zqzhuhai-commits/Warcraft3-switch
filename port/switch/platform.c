@@ -209,7 +209,7 @@ int main(int argc, char **argv) {
     int count = 4;
     /* Preserve hbmenu arguments after defaults so explicit launch settings still work. */
     for (int i = 1; i < argc && count < 88; i++) args[count++] = argv[i];
-    char *video[] = {"+set","com_maxfps","30","+set","r_vsync","1","+set","vid_native","0","+set","vid_mode","4","+set","ui_app_version","Switch 0.1.6 - XiaoFan","+set","cl_touch_pick_radius","14","+bind","ESCAPE","cmd cancel_selection"};
+    char *video[] = {"+set","com_maxfps","30","+set","r_vsync","1","+set","vid_native","0","+set","vid_mode","4","+set","cl_touch_pick_radius","14","+bind","ESCAPE","cmd cancel_selection"};
     for (unsigned i = 0; i < sizeof(video)/sizeof(video[0]); i++) args[count++] = video[i];
     args[count] = NULL;
     NX_InitInput();
