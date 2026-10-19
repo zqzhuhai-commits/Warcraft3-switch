@@ -1,17 +1,17 @@
 # 魔兽争霸3冰封王座 / Switch
 
-《魔兽争霸 III》OpenRealm 引擎的 Nintendo Switch 原生移植测试版。
+《魔兽争霸 III》OpenRealm 引擎的 Nintendo Switch 原生移植版。
 
 应用显示名称：**魔兽争霸3冰封王座**；移植版显示作者：**小帆**。
 
-**状态：已完成 Switch 交叉编译并生成 NSP/NRO。尚未通过 Switch 实机验证，不能视为稳定可玩版本。**
+**正式发布：0.1.7。提供 NSP/NRO，已通过交叉编译、相关回归测试和安装包校验；已知兼容性限制见下文。**
 
 基于 [corepunch/open-realm](https://github.com/corepunch/open-realm)，固定上游提交
 `8853d069c21c94a981121066e1d78e967676fae4`。原项目采用 MIT 许可，版权和许可证保留在仓库中。
 
 ## 下载与安装
 
-从本仓库的 [Releases](https://github.com/zqzhuhai-commits/Warcraft3-switch/releases)
+从本仓库的 [0.1.7 正式版](https://github.com/zqzhuhai-commits/Warcraft3-switch/releases/tag/v0.1.7)
 下载 `Warcraft3-Switch-0.1.7.zip`，解压得到 `魔兽争霸3冰封王座-Switch-0.1.7.nsp`。这是包含原生引擎的完整应用包，不是 NRO 前端。
 也提供 NRO 作为备用运行方式；NRO 需使用完整应用内存模式，不支持相册 Applet 模式。
 

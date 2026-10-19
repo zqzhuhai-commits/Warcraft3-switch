@@ -1,4 +1,4 @@
-# Switch native preview
+# Switch native port
 
 This opt-in port builds the Warcraft III runtime for Horizon with devkitA64,
 libnx, SDL2 and switch-mesa. It is an experimental build: compilation and host
@@ -11,7 +11,7 @@ Package files use `魔兽争霸3冰封王座-Switch-<version>.nsp` / `.nro`.
 The internal NPDM process name is `warcraft3`.
 For versioned replacement, run `python3 port/switch/patch-hacbrewpack.py /path/to/hacBrewPack`
 and rebuild that tool. `package.py` sets `HACBREWPACK_TITLE_VERSION=458752`
-(application version 6; earlier preview packages used CNMT version 0).
+(application version 7; earlier preview packages used CNMT version 0).
 The NACP display version is 0.1.7. Existing folders created by the system or
 other file managers are not automatically renamed by changing the NACP.
 The build fills all 16 NACP language records and enables their language mask,
@@ -258,3 +258,13 @@ Validation: `make test-menu` (debug and optimized), `sh port/switch/tests/run-in
 `make test-wc3-engine`, native host build and Switch cross-compile. Full `make test`
 continues to report the unrelated missing upstream Linux release workflow QA noted
 above; do not report the entire umbrella suite as passing.
+
+
+## Official 0.1.7 publication
+
+The official `v0.1.7` release promotes the existing `v0.1.7-preview` artifacts
+without rebuilding or changing their hashes. `publish-release.yml` verifies the
+staged checksums, publishes a non-prerelease and marks it latest. The previous
+preview release remains accessible. Publication status does not expand tested
+map/script compatibility; `verification.json` retains its original evidence.
+Update the workflow's release tag/title when publishing a future version.

@@ -1,0 +1,29 @@
+name: Publish Switch release
+on:
+  push:
+    branches: [main]
+    paths: ['release-assets/**', 'RELEASE.md', '.github/workflows/publish-release.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify staged artifacts
+        working-directory: release-assets
+        run: sha256sum --check SHA256SUMS
+      - name: Publish official 0.1.7 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: v0.1.7
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" release-assets/* --clobber
+            gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest --title "魔兽争霸3冰封王座 Switch 0.1.7 正式版" --notes-file RELEASE.md
+          else
+            gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --latest --title "魔兽争霸3冰封王座 Switch 0.1.7 正式版" --notes-file RELEASE.md release-assets/*
+          fi
