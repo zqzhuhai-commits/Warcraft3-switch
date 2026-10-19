@@ -301,3 +301,20 @@ partial/all lift, pending tap cancellation, drag-release ordering, missing sampl
 and explicit cancel; client SDL queue + input scheduler for pan, pinch in/out,
 stationary pose, input-owner gating and selection/order cancellation. Device
 feel and GPU performance still require hardware testing.
+
+
+## Official 0.1.8 publication and AI verification
+
+The official `v0.1.8` promotes the verified `v0.1.8-preview` binaries without
+rebuilding or changing their hashes. It is published as non-prerelease/latest.
+The preview remains available; existing preview installations need no reinstall.
+
+AI check (2026-10-20, Asia/Shanghai):
+`make test-wc3-engine WC3_PATTERN='wc3_bot.*'` passed all eight shards: 93 cases
+per ROC/TFT variant, 186 executions and 1232 assertions total, zero failures.
+The test resources contain controlled AI programs; this does not establish
+retail four-race long-match behavior on Switch with the user's actual MPQs/maps.
+The lobby maps `LOBBY_SLOT_COMPUTER` to `kPlayerTypeComputer`, spawn translates it
+to the JASS computer controller, `StartMeleeAI`/`StartCampaignAI` call `G_BotStart`,
+and `G_RunFrame` pumps `G_BotRunFrame`. Scripts and their assets remain required.
+AI difficulty is currently normal; custom maps may omit or replace melee startup.
