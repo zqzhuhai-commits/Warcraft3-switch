@@ -15,7 +15,7 @@ jobs:
           git -C /tmp/openrealm-source checkout --detach 8853d069c21c94a981121066e1d78e967676fae4
           git -C /tmp/openrealm-source apply --check "$GITHUB_WORKSPACE/bootstrap/switch-port.patch"
           git -C /tmp/openrealm-source apply "$GITHUB_WORKSPACE/bootstrap/switch-port.patch"
-          rsync -a --delete --exclude=.git --exclude=bootstrap --exclude=release-assets /tmp/openrealm-source/ ./
+          rsync -a --delete --exclude=.git --exclude=bootstrap --exclude=release-assets --exclude=.github/workflows /tmp/openrealm-source/ ./
       - name: Commit the full source tree
         run: |
           git config user.name 'github-actions[bot]'

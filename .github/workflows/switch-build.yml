@@ -1,0 +1,37 @@
+name: Switch native build
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['release-assets/**', '**.md']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    container: devkitpro/devkita64:latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Install platform libraries
+        run: dkp-pacman -Syu --noconfirm --needed switch-sdl2 switch-mesa switch-zlib
+      - name: Generate font and build native engine
+        run: |
+          make font
+          python3 port/switch/build.py
+      - name: Check ELF and package inputs
+        run: |
+          /opt/devkitpro/devkitA64/bin/aarch64-none-elf-readelf -h build/switch/openrealm.elf
+          test -s build/switch/openrealm.nro
+          test -s build/switch/package/exefs/main
+          test -s build/switch/package/exefs/main.npdm
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: switch-native-build
+          path: |
+            build/switch/openrealm.nro
+            build/switch/openrealm.elf
+            build/switch/package/
+            build/switch/build-info.json
+          retention-days: 30
