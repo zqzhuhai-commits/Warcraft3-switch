@@ -1,18 +1,9 @@
 {
   "nspSize": 7135448,
-  "sha256": "133e65f5906b1b2190c1486c2f1feef474295bc08051ab1e76f34844c371e7b6",
+  "sha256": "bca2cef4543cb2e94d1f959cfc537ed5db64417f4a39a7e73b3e5e3283eb378e",
   "containerEntries": [
     {
-      "file": "5026dd514956c83337715c23b3095881.nca",
-      "size": 1543168,
-      "hashChecks": [
-        "Superblock Hash (GOOD)"
-      ],
-      "hashFailures": [],
-      "toolExit": 0
-    },
-    {
-      "file": "ef6f3a538e9075a38d26ed38076e5e4a.nca",
+      "file": "a1c90e8012d7c61030a0cc8a02a9ab85.nca",
       "size": 5587968,
       "hashChecks": [
         "Superblock Hash (GOOD)",
@@ -23,7 +14,16 @@
       "toolExit": 0
     },
     {
-      "file": "2c2ccea4dd4aa3cc69763cbf0d347acb.cnmt.nca",
+      "file": "9dca8d20450f968c2e9411b756ebbfa4.nca",
+      "size": 1543168,
+      "hashChecks": [
+        "Superblock Hash (GOOD)"
+      ],
+      "hashFailures": [],
+      "toolExit": 0
+    },
+    {
+      "file": "42e09a026e75ee9ae846c2ba0487ed06.cnmt.nca",
       "size": 4096,
       "hashChecks": [
         "Superblock Hash (GOOD)",
@@ -37,9 +37,26 @@
   "retailDataIncluded": false,
   "displayName": "魔兽争霸3冰封王座",
   "author": "小帆",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "verifiedLanguageRecords": 16,
   "nroMetadataMatchesNsp": true,
-  "executableUnchangedFrom": "0.1.1-preview",
-  "packagedLanguageIcons": 17
+  "sdRoot": "sdmc:/switch/warcraft3",
+  "oldSdRootAbsentFromExecutable": true,
+  "packagedLanguageIcons": 17,
+  "nsoSegments": [
+    ".text   (GOOD):             00000000-00635000",
+    ".rodata (GOOD):             00635000-00819000",
+    ".rwdata (GOOD):             00819000-008b4338"
+  ],
+  "nativeSuite": {
+    "tests": 6949,
+    "assertions": 343231,
+    "failures": 0,
+    "errors": 0
+  },
+  "hostGameBuilds": [
+    "warcraft-3",
+    "world-of-warcraft",
+    "starcraft-2"
+  ]
 }

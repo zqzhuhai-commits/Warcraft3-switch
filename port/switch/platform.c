@@ -117,7 +117,7 @@ void NX_PumpInput(void) {
 
 /* Match FAT case-insensitive names without assuming archive filename capitalization. */
 static bool NX_HasArchive(char const *name) {
-    DIR *dir = opendir("sdmc:/switch/openrealm/data");
+    DIR *dir = opendir("sdmc:/switch/warcraft3/data");
     if (!dir) return false;
     struct dirent *entry; bool found = false;
     while ((entry = readdir(dir))) if (!strcasecmp(entry->d_name, name)) { found = true; break; }
@@ -128,7 +128,7 @@ static bool NX_HasArchive(char const *name) {
 static void NX_Error(char const *message) {
     consoleInit(NULL);
     printf("\x1b[2;2HOpenRealm / Warcraft III - Switch preview\n\n%s\n\n", message);
-    printf("Copy your original Classic MPQ files to:\n sd:/switch/openrealm/data/\n\nWar3.mpq + War3Local.mpq\nOptional: War3x.mpq + War3xLocal.mpq\n\nPress B to exit.\n");
+    printf("Copy your original Classic MPQ files to:\n sd:/switch/warcraft3/data/\n\nWar3.mpq + War3Local.mpq\nOptional: War3x.mpq + War3xLocal.mpq\n\nPress B to exit.\n");
     while (appletMainLoop()) {
         padUpdate(&pad);
         if (padGetButtonsDown(&pad) & HidNpadButton_B) break;
@@ -151,17 +151,17 @@ static void NX_Exit(void) { romfsExit(); }
 int main(int argc, char **argv) {
     padConfigureInput(1, HidNpadStyleSet_NpadStandard);
     padInitializeDefault(&pad);
-    mkdir("sdmc:/switch",0777); mkdir("sdmc:/switch/openrealm",0777);
-    mkdir("sdmc:/switch/openrealm/data",0777); mkdir("sdmc:/switch/openrealm/user",0777);
+    mkdir("sdmc:/switch",0777); mkdir("sdmc:/switch/warcraft3",0777);
+    mkdir("sdmc:/switch/warcraft3/data",0777); mkdir("sdmc:/switch/warcraft3/user",0777);
     if (appletGetAppletType() != AppletType_Application && appletGetAppletType() != AppletType_SystemApplication) {
         NX_Error("Full application memory is required.\nUse the NSP or title override, not Album applet mode."); return 1;
     }
     if (R_FAILED(romfsInit())) { NX_Error("Embedded defaults could not be mounted."); return 1; }
     atexit(NX_Exit);
     if (!NX_HasArchive("war3.mpq")) { NX_Error("Warcraft III data not found."); return 1; }
-    freopen("sdmc:/switch/openrealm/openrealm.log","w",stderr); setvbuf(stderr,NULL,_IONBF,0);
-    chdir("sdmc:/switch/openrealm");
-    char *args[128] = {"openrealm","-data","sdmc:/switch/openrealm/data",NX_HasArchive("war3x.mpq") ? "-tft" : "-roc"};
+    freopen("sdmc:/switch/warcraft3/warcraft3.log","w",stderr); setvbuf(stderr,NULL,_IONBF,0);
+    chdir("sdmc:/switch/warcraft3");
+    char *args[128] = {"openrealm","-data","sdmc:/switch/warcraft3/data",NX_HasArchive("war3x.mpq") ? "-tft" : "-roc"};
     int count = 4;
     /* Preserve hbmenu arguments after defaults so explicit launch settings still work. */
     for (int i = 1; i < argc && count < 110; i++) args[count++] = argv[i];

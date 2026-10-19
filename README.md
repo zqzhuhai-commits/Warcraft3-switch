@@ -12,15 +12,16 @@
 ## 下载与安装
 
 从本仓库的 [Releases](https://github.com/zqzhuhai-commits/Warcraft3-switch/releases)
-下载 `OpenRealm-Switch-0.1.2-preview.nsp`。这是包含原生引擎的完整应用包，不是 NRO 前端。
+下载 `OpenRealm-Switch-0.1.3-preview.nsp`。这是包含原生引擎的完整应用包，不是 NRO 前端。
 也提供 NRO 作为备用运行方式；NRO 需使用完整应用内存模式，不支持相册 Applet 模式。
 
 1. 将你拥有的 **Warcraft III Classic 的 MPQ 文件**放到 SD 卡目录：
-   `sd:/switch/openrealm/data/`。
+   `sd:/switch/warcraft3/data/`。
 2. 必需资源通常包括 `War3.mpq` 和 `War3Local.mpq`；冰封王座还需
    `War3x.mpq` 和 `War3xLocal.mpq`。可选的 `Maps/` 文件夹也放在该目录。
-3. 在支持自制软件的 Switch 环境安装 NSP 后，从主界面启动。
-4. 没有 `War3.mpq` 时会显示资源说明页，按 B 返回。存在 `War3x.mpq` 时默认进入 TFT 模式。
+3. 升级旧版时，把 SD 卡的 `switch/openrealm` 文件夹重命名为 `switch/warcraft3`，资源和存档可一并保留。若新目录已存在，请先备份，再合并所需文件。
+4. 在支持自制软件的 Switch 环境安装 NSP 后，从主界面启动。
+5. 没有 `War3.mpq` 时会显示资源说明页，按 B 返回。存在 `War3x.mpq` 时默认进入 TFT 模式。
 
 游戏资源和密钥均不随仓库或安装包提供；Reforged 的 CASC 资源不在此测试版的支持范围内。
 
@@ -45,9 +46,9 @@
 
 ## 存档与故障信息
 
-- 配置、战役进度、存档：`sd:/switch/openrealm/user/`
-- 日志：`sd:/switch/openrealm/openrealm.log`
-- 截图：`sd:/switch/openrealm/screenshots/`
+- 配置、战役进度、存档：`sd:/switch/warcraft3/user/`
+- 日志：`sd:/switch/warcraft3/warcraft3.log`
+- 截图：`sd:/switch/warcraft3/screenshots/`
 - 默认设置：1280×720、30 FPS 上限、垂直同步。这是初始设置，不代表已经实测达到 30 FPS。
 
 若发生黑屏或退出，请保留日志，并记录系统/Atmosphère 版本、使用的 MPQ 版本和触发步骤。

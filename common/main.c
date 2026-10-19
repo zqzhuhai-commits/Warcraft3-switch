@@ -270,7 +270,7 @@ static void Sys_ResolveShareDirectory(void) {
  * on Unix, APPDATA on Windows. Only adopted if creatable and writable. */
 static void Sys_ResolveHomeDirectory(void) {
 #ifdef __SWITCH__
-    FS_SetHomeDirectory("sdmc:/switch/openrealm/user");
+    FS_SetHomeDirectory("sdmc:/switch/warcraft3/user");
     return;
 #endif
 #ifdef __EMSCRIPTEN__

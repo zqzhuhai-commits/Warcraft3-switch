@@ -30,10 +30,10 @@ probe. No MPQs, retail models, textures, maps or keys are included.
 | Purpose | Runtime location |
 |---|---|
 | Read-only defaults and fonts | `romfs:/share/` |
-| User-supplied Classic MPQs and optional Maps directory | `sdmc:/switch/openrealm/data/` |
-| Writable config, progress and saves | `sdmc:/switch/openrealm/user/` |
-| Engine stderr log | `sdmc:/switch/openrealm/openrealm.log` |
-| Screenshots | `sdmc:/switch/openrealm/screenshots/` |
+| User-supplied Classic MPQs and optional Maps directory | `sdmc:/switch/warcraft3/data/` |
+| Writable config, progress and saves | `sdmc:/switch/warcraft3/user/` |
+| Engine stderr log | `sdmc:/switch/warcraft3/warcraft3.log` |
+| Screenshots | `sdmc:/switch/warcraft3/screenshots/` |
 
 Use full application mode (NSP or hbmenu title override). Album applet mode is
 rejected with an explanatory console screen. Missing War3.mpq produces a
@@ -41,6 +41,13 @@ recoverable first-run screen. War3x.mpq selects TFT at startup; the existing men
 edition control can switch modes. The platform launcher defaults to 1280x720,
 30 fps cap and vsync. These are conservative initial settings, not measured
 performance claims. Optional FFmpeg music/movie support is not compiled.
+
+Version 0.1.3 changes the SD root from `switch/openrealm` to `switch/warcraft3`.
+Rename the old folder before launching, or back up and merge it if the new folder
+already exists. The launcher does not move or overwrite existing user files.
+The resource probe, `-data` argument, current working directory, user directory,
+first-run message and log path use the new root. Relative screenshot output
+therefore resolves under `switch/warcraft3/screenshots`.
 
 ## Module contract
 
