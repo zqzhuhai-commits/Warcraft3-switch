@@ -6,6 +6,12 @@
 #include "games/warcraft-3/common/terrain.h"
 #include "r_terrain_layers.h"
 
+/* Seven stored bytes per W3E corner, independent of the unpacked C struct. */
+static inline bool R_W3TerrainPayloadFits(uint32_t w,uint32_t h,uint32_t grounds,uint32_t cliffs,uint32_t bytes) {
+    if(w<2 || h<2 || w>4097 || h>4097 || grounds>16 || cliffs>16)return false;
+    return (uint64_t)37+4*((uint64_t)grounds+cliffs)+7*(uint64_t)w*h<=bytes;
+}
+
 #define BZ_WC3_NO_CLIFF_TEXTURE 15 // index; no explicit W3E corner texture; resolved from neighbouring vertices
 
 static const uint8_t r_cliff_corners[] = { 1, 0, 2, 3 }; /* Native MDX configuration: NW,NE,SE,SW. */

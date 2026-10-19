@@ -10,9 +10,9 @@ These are display metadata; the upstream MIT attribution remains in source.
 Package files use `魔兽争霸3冰封王座-Switch-<version>.nsp` / `.nro`.
 The internal NPDM process name is `warcraft3`.
 For versioned replacement, run `python3 port/switch/patch-hacbrewpack.py /path/to/hacBrewPack`
-and rebuild that tool. `package.py` sets `HACBREWPACK_TITLE_VERSION=327680`
-(application version 5; earlier preview packages used CNMT version 0).
-The NACP display version is 0.1.5. Existing folders created by the system or
+and rebuild that tool. `package.py` sets `HACBREWPACK_TITLE_VERSION=393216`
+(application version 6; earlier preview packages used CNMT version 0).
+The NACP display version is 0.1.6. Existing folders created by the system or
 other file managers are not automatically renamed by changing the NACP.
 The build fills all 16 NACP language records and enables their language mask,
 because older nacptool versions initialize only 12 records.
@@ -189,3 +189,53 @@ Tests use a simulated keyboard service, not a physical console.
 
 Backend reference: `devkitPro/SDL`, branch `switch-sdl-2.28`,
 `src/video/switch/SDL_switchswkb.c` and `src/video/SDL_video.c`.
+
+## 0.1.6 input and map browser fixes
+
+`CL_Input` supplies menu ownership to the Switch adapter (no game data crosses
+that boundary). D-pad arrows/Enter are menu events; game bindings remain the
+existing zoom/subgroup/camera keys. A held direction repeats after 350ms, then
+90ms. Rebinding across ownership changes releases the previous key first.
+The right stick supplies normalized axes directly to the generic client scroll
+step. Dead zone is 6000/32767, response is proportional, diagonal length is
+bounded by 1 and the adapter uses a 45ms exponential smoothing time. Menu right
+stick input stays digital. No server tick or network message changes.
+
+A touch tap waits 280ms after release. A nearby second tap within that window
+emits right down/up and discards the pending left click. A drag, long hold,
+second finger or focus cancellation resolves/discards pending state explicitly.
+Touch picking first traces the exact point, then offsets by the configured
+`cl_touch_pick_radius` (Switch default 14 pixels). Ordinary mouse picking stays
+exact. `cancel_selection` is a game-owned command: build/target cancellation
+precedes clearing membership, selection events and the authoritative mirror.
+The Switch launcher binds Escape/B to it; desktop defaults remain unchanged.
+
+LAN/map screen cloned list and preview references must be cleared in its load
+hook after `UI_ClearTemplates`; roots alone were rebound, leaving old clones
+across game/menu reinitialization. Map metadata is read lazily on selection and
+preview updates compare the selected item snapshot before opening its archive.
+The old update path reread the complete selected map on every menu frame.
+Game setup also resets its cloned pane on template reload.
+
+The custom-create preview uses the lobby's right-column width/anchors. Runtime
+map info anchors replace authored anchors rather than accumulating opposing
+points, which had erased explicit widths. Column widths follow the container,
+and long descriptions use a clipped custom draw inside their allocated box.
+
+The homepage version is supplied by `ui_app_version` from the launcher; it is
+an application version, not a claim to emulate a particular retail patch.
+Map reader/parser code has no 4MiB cutoff. Terrain bounds validate 7 stored bytes
+per corner with 64-bit arithmetic before allocating, and tolerate payloads over
+4MiB. This does not establish compatibility of arbitrary large custom maps.
+Logs include archive bytes, W3I/editor/game versions and terrain dimensions;
+Lua-map detection warns explicitly. Specific black maps still require a map
+and runtime log to identify script, visibility, resource or rendering faults.
+
+New tests cover map keyboard paging/bounds, repeated template reload, no preview
+reread on unchanged frames, homepage version, analog direction ownership,
+double tap suppression, touch hit tolerance, empty authoritative selection and
+terrain payload boundaries. `make test` currently encounters a pre-existing QA
+failure because this Switch repository intentionally lacks upstream
+`.github/workflows/release.yml` required by `test-linux-media-release`.
+Relevant runtime suites are run separately; do not count that QA failure as
+an engine regression or silently claim the default full target passed.

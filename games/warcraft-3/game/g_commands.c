@@ -2108,6 +2108,18 @@ CLIENTCOMMAND(Cancel) {
     G_PublishEndCinematicForHumans(clent, true);
 }
 
+CLIENTCOMMAND(CancelSelection) {
+    gameClient_t *client=clent ? clent->client : NULL;
+    if(!client) return;
+    if(G_CancelBuildPlacement(clent) || G_CancelTargetMode(clent)) return;
+    if(client->ps.client_ui_state!=CLIENT_UI_GAME) {CMD_Cancel(clent,argc,argv);return;}
+    edict_t *old[MAX_SELECTED_ENTITIES];
+    uint32_t count=G_GetOrderedSelectedUnits(client,old,MAX_SELECTED_ENTITIES);
+    FOR_SELECTED_UNITS(client,unit) G_DeselectEntity(client,unit);
+    G_PublishSelectionDelta(client,old,count);
+    G_SyncClientSelection(client);
+}
+
 void UI_ShowQuest(edict_t *ent, quest_t const *quest);
 
 CLIENTCOMMAND(Quests) {
@@ -3149,6 +3161,7 @@ clientCommand_t clientCommands[] = {
     { "smart", CMD_Smart },
     { "smartpoint", CMD_SmartPoint },
     { "cancel", CMD_Cancel },
+    { "cancel_selection", CMD_CancelSelection },
     { "canceltrain", CMD_CancelTrain },
     { "quests", CMD_Quests },
     { "quest", CMD_Quest },

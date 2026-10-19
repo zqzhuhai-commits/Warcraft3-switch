@@ -3602,3 +3602,11 @@ TEST(renderer_model, mdx_billboard_faces_actual_camera_and_preserves_pivot) {
     }
     tr.viewDef = saved;
 }
+
+TEST(wc3_terrain, stored_vertex_bounds_accept_large_payload_and_reject_truncation) {
+    T_ASSERT(R_W3TerrainPayloadFits(1025,1025,8,4,37+4*12+7*1025*1025));
+    T_ASSERT(!R_W3TerrainPayloadFits(1025,1025,8,4,4194304));
+    T_ASSERT(!R_W3TerrainPayloadFits(0,64,8,4,100000));
+    T_ASSERT(!R_W3TerrainPayloadFits(UINT32_MAX,UINT32_MAX,8,4,UINT32_MAX));
+    T_ASSERT(!R_W3TerrainPayloadFits(64,64,17,4,100000));
+}

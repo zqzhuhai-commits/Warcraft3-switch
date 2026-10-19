@@ -531,6 +531,10 @@ static void CL_ScrollFrame(void) {
     if (cam_north) dy += 1.0f;
     if (cam_south) dy -= 1.0f;
 
+#ifdef __SWITCH__
+    float analog_x,analog_y;NX_GetCameraAxes(&analog_x,&analog_y);
+    dx+=analog_x;dy+=analog_y;
+#endif
     vec2_t edge = CL_MouseScroll();
     dx += edge.x; dy += edge.y;
 
@@ -646,6 +650,7 @@ bool CL_GameplayInputReady(void) {
 
 void CL_Input(void) {
 #ifdef __SWITCH__
+    NX_SetMenuInput(CL_MenuActive() && cls.key_dest==key_menu);
     NX_PumpInput();
 #endif
     SDL_Event event;
@@ -922,6 +927,18 @@ static void CL_SendSameTypeSelection(uint32_t anchor) {
     cl.selection.entity_nums[0] = anchor;
 }
 
+static bool CL_TracePointerEntity(float x,float y,uint32_t *entity) {
+    if(re.TraceEntity(&cl.viewDef,x,y,entity)) return true;
+    float radius=input.touch_pointer ? Cvar_Value("cl_touch_pick_radius",0) : 0;
+    if(radius<=0) return false;
+    static int const offsets[][2]={{-1,0},{1,0},{0,-1},{0,1},{-1,-1},{1,-1},{-1,1},{1,1}};
+    for(unsigned i=0;i<sizeof(offsets)/sizeof(offsets[0]);i++) {
+        float px=x+offsets[i][0]*radius,py=y+offsets[i][1]*radius;
+        if(!CL_MouseOverGameplayUIAt(px,py) && re.TraceEntity(&cl.viewDef,px,py,entity))return true;
+    }
+    return false;
+}
+
 void IN_SelectDown(void) {
     input.select = false;
     input.down = mouse.origin;
@@ -980,7 +997,7 @@ void IN_SelectUp(void) {
     if (fabs(r.w)+fabs(r.h) < 10) {
         SDL_Keymod const mods = SDL_GetModState();
         bool const queue = (mods & (KMOD_LSHIFT | KMOD_RSHIFT)) != 0;
-        if (re.TraceEntity(&cl.viewDef, r.x, r.y, &entnum)) {
+        if (CL_TracePointerEntity(r.x,r.y,&entnum)) {
             bool const same_type_enabled = Cvar_Integer("cl_same_type_select", 0) != 0;
             bool const ctrl_same_type = same_type_enabled && !queue &&
                 (mods & (KMOD_LCTRL | KMOD_RCTRL));
@@ -2137,5 +2154,19 @@ TEST(client_input, modal_releases_movement_and_drags) {
     uint32_t size = cls.netchan.message.cursize;
     CL_InputFrame(); T_EQ(cls.netchan.message.cursize, size);
     cls.netchan.message = old_msg; cls.state = old_state; cls.key_dest = old_dest;
+}
+#endif
+
+#ifdef BZ_TESTS
+static bool test_pointer_offset_trace(viewDef_t const *view,float x,float y,uint32_t *entity) {
+    (void)view;if(x==10014 && y==10000){*entity=42;return true;}return false;
+}
+TEST(client_input, touch_pointer_uses_nearby_hit_but_mouse_keeps_exact_trace) {
+    __typeof__(re.TraceEntity) old=re.TraceEntity;bool old_touch=input.touch_pointer;
+    float old_radius=Cvar_Value("cl_touch_pick_radius",0);
+    re.TraceEntity=test_pointer_offset_trace;Cvar_Set("cl_touch_pick_radius","14");uint32_t entity=0;
+    input.touch_pointer=true;T_ASSERT(CL_TracePointerEntity(10000,10000,&entity));T_EQ(entity,42);
+    input.touch_pointer=false;T_ASSERT(!CL_TracePointerEntity(10000,10000,&entity));
+    re.TraceEntity=old;input.touch_pointer=old_touch;Cvar_SetValue("cl_touch_pick_radius",old_radius);
 }
 #endif

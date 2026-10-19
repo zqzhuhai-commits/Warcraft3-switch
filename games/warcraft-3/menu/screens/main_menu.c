@@ -31,6 +31,7 @@ static uiDialogWar3_t quit_dialog;
 
 /* State */
 static frameDef_t *edition_button;
+static frameDef_t *version_label;
 
 static bool MainMenu_LoadScreen(void) {
     return MainMenu_Load(&main_menu);
@@ -94,6 +95,20 @@ static void MainMenu_InitFrames(void) {
      * depend on the frame being present. */
     edition_button = UI_FindChildFrame(main_menu.MainMenuFrame, "EditionButton");
     if (edition_button) UI_SetOnClick(edition_button, "menu_edition");
+    cstring_t version=mi.Cvar_String ? mi.Cvar_String("ui_app_version","") : "";
+    if(version && *version) {
+        version_label=UI_Spawn(FT_TEXT,main_menu.MainMenuFrame);
+        if(version_label) {
+            snprintf(version_label->Name,sizeof(version_label->Name),"ApplicationVersion");
+            snprintf(version_label->Font.Name,sizeof(version_label->Font.Name),"MasterFont");
+            version_label->Font.Size=0.010f;version_label->Font.Color=COLOR32_WHITE;
+            version_label->Font.Justification.Horizontal=FONT_JUSTIFYLEFT;
+            version_label->Font.Justification.Vertical=FONT_JUSTIFYMIDDLE;
+            UI_SetSize(version_label,0.42f,0.018f);
+            UI_SetPoint(version_label,FRAMEPOINT_BOTTOMLEFT,main_menu.MainMenuFrame,FRAMEPOINT_BOTTOMLEFT,0.012f,0.008f);
+            UI_SetText(version_label,"%s",version);
+        }
+    }
     MainMenu_InitQuitDialog();
 
     /* Realm select buttons */
@@ -105,7 +120,7 @@ static void MainMenu_InitFrames(void) {
 
 static void MainMenu_Init(void) {
     mi.Printf("MainMenu_Init\n");
-    edition_button = NULL;
+    edition_button = NULL;version_label=NULL;
     MainMenu_InitFrames();
     MainMenu_ShowMainPanel();
 }

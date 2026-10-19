@@ -5,13 +5,15 @@
 #include "touch.h"
 
 #define NX_TAP_SLOP 8 /* logical pixels; jitter before a selection drag */
+#define NX_DOUBLE_DELAY 280 /* ms; singles wait so a double never selects first */
 #define NX_RIGHT_DELAY 500 /* milliseconds; stationary hold becomes right click */
 static struct {
-    bool active;
+    bool active, second;
     unsigned finger;
     int start_x,start_y,x,y,button;
     Uint32 started;
 } touch;
+static struct {bool active;int x,y;Uint32 deadline;} pending;
 
 /* Do not let SDL's backend synthesize a second click or two-finger camera pan. */
 static int NX_FilterTouch(void *unused, SDL_Event *ev) {
@@ -46,7 +48,15 @@ static void NX_TouchMotion(SDL_Window *win,int x,int y) {
 
 void NX_TouchCancel(void) {
     if(touch.button) NX_MouseSource(1,touch.button,false,touch.x,touch.y);
-    touch.active=false;touch.button=0;
+    touch.active=false;touch.button=0;pending.active=false;
+}
+
+static void NX_TouchClick(int button,int x,int y) {
+    NX_MouseSource(1,button,true,x,y);NX_MouseSource(1,button,false,x,y);
+}
+static void NX_FlushTap(void) {
+    if(pending.active)NX_TouchClick(SDL_BUTTON_LEFT,pending.x,pending.y);
+    pending.active=false;
 }
 
 void NX_TouchFrame(SDL_Window *win,Uint32 now,int w,int h) {
@@ -54,14 +64,16 @@ void NX_TouchFrame(SDL_Window *win,Uint32 now,int w,int h) {
     SDL_EventFilter filter;void *userdata;
     if(!SDL_GetEventFilter(&filter,&userdata) || filter!=NX_FilterTouch)
         SDL_SetEventFilter(NX_FilterTouch,NULL);
+    if(pending.active && !touch.active && (Sint32)(now-pending.deadline)>=0)NX_FlushTap();
     HidTouchScreenState sample;
     if(!hidGetTouchScreenStates(&sample,1) || w<=0 || h<=0) return;
     if(sample.count<=0) {
-        if(touch.active && !touch.button) {
-            NX_MouseSource(1,SDL_BUTTON_LEFT,true,touch.x,touch.y);
-            NX_MouseSource(1,SDL_BUTTON_LEFT,false,touch.x,touch.y);
+        if(touch.active) {
+            if(touch.button)NX_MouseSource(1,touch.button,false,touch.x,touch.y);
+            else if(touch.second) {pending.active=false;NX_TouchClick(SDL_BUTTON_RIGHT,touch.x,touch.y);}
+            else {pending.active=true;pending.x=touch.x;pending.y=touch.y;pending.deadline=now+NX_DOUBLE_DELAY;}
         }
-        NX_TouchCancel();return;
+        touch.active=false;touch.button=0;touch.second=false;return;
     }
     HidTouchState *finger=&sample.touches[0];
     if(touch.active) {
@@ -71,6 +83,10 @@ void NX_TouchFrame(SDL_Window *win,Uint32 now,int w,int h) {
     int x=(int)((u64)finger->x*w/1280),y=(int)((u64)finger->y*h/720);
     x=SDL_max(0,SDL_min(w-1,x));y=SDL_max(0,SDL_min(h-1,y));
     if(!touch.active) {
+        int px=x-pending.x,py=y-pending.y;
+        int distance=SDL_max(16,w/40);
+        touch.second=pending.active && (Sint32)(pending.deadline-now)>=0 && px*px+py*py<=distance*distance;
+        if(pending.active && !touch.second)NX_FlushTap();
         touch.active=true;touch.finger=finger->finger_id;touch.started=now;
         touch.start_x=touch.x=x;touch.start_y=touch.y=y;
         NX_TouchMotion(win,x,y);
@@ -78,9 +94,11 @@ void NX_TouchFrame(SDL_Window *win,Uint32 now,int w,int h) {
     int dx=x-touch.start_x,dy=y-touch.start_y;
     if(!touch.button) {
         if(sample.count>=2 || (now-touch.started>=NX_RIGHT_DELAY && dx*dx+dy*dy<=NX_TAP_SLOP*NX_TAP_SLOP)) {
+            pending.active=false;
             touch.button=SDL_BUTTON_RIGHT;
             NX_MouseSource(1,touch.button,true,x,y);
         } else if(dx*dx+dy*dy>NX_TAP_SLOP*NX_TAP_SLOP) {
+            NX_FlushTap();touch.second=false;
             touch.button=SDL_BUTTON_LEFT;
             NX_MouseSource(1,touch.button,true,touch.start_x,touch.start_y);
         }

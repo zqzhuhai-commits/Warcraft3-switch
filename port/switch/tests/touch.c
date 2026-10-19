@@ -35,7 +35,8 @@ int main(void) {
     /* A tap scales screen coordinates and emits exactly one left click. */
     frame(1,640,360,100);assert(drain()==1);
     assert(queue[0].motion.x==320 && queue[0].motion.y==180);
-    clear();frame(0,0,0,150);assert(drain()==2);
+    clear();frame(0,0,0,150);assert(drain()==0);
+    frame(0,0,0,431);assert(drain()==2);
     assert(queue[0].type==SDL_MOUSEBUTTONDOWN && queue[1].type==SDL_MOUSEBUTTONUP);
     assert(queue[0].button.which==SDL_TOUCH_MOUSEID);clear();
     /* Drag starts at the original point, then moves to the finger. */
@@ -74,5 +75,14 @@ int main(void) {
     test_touch.touches[1]=(HidTouchState){.finger_id=7,.x=320,.y=220};
     NX_TouchFrame(NULL,1750,640,360);drain();assert(queue[0].motion.x==160 && queue[0].motion.y==110);
     clear();NX_TouchCancel();drain();assert(buttons(SDL_MOUSEBUTTONUP,SDL_BUTTON_RIGHT)==1);
+    clear();
+    frame(1,640,360,2000);clear();frame(0,0,0,2040);assert(drain()==0);
+    frame(1,640,360,2120);clear();frame(0,0,0,2160);drain();
+    assert(buttons(SDL_MOUSEBUTTONDOWN,SDL_BUTTON_LEFT)==0);
+    assert(buttons(SDL_MOUSEBUTTONDOWN,SDL_BUTTON_RIGHT)==1);
+    assert(buttons(SDL_MOUSEBUTTONUP,SDL_BUTTON_RIGHT)==1);
+    clear();frame(0,0,0,2500);assert(drain()==0);
+    frame(1,640,360,2600);frame(0,0,0,2650);clear();NX_TouchCancel();
+    frame(0,0,0,3000);assert(drain()==0);
     SDL_Quit();puts("Switch touch integration: tap, drag, long press, two fingers, duplicate filtering, cancellation, shared buttons passed");
 }

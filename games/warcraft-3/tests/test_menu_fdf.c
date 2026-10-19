@@ -17,6 +17,9 @@
 #include "../../../common/mpq.h"
 #include "../../../common/video_modes.h"
 
+void M_KeyEvent(int key, uint32_t mods, bool down, uint32_t time);
+
+static char const *test_app_version;
 static char const *captured_image_path;
 static char const *captured_model_path;
 static char captured_command[8192];
@@ -389,6 +392,7 @@ static bool test_play_movie(cstring_t path) {
 }
 
 static cstring_t test_cvar_string(cstring_t name, cstring_t fallback) {
+    if(name && !strcmp(name,"ui_app_version") && test_app_version)return test_app_version;
     if (!strcmp(name, "map")) return test_map;
     if (name && !strcmp(name, "ui_skip_transitions")) return test_skip_menu_transitions ? "1" : "0";
     if (name && !strcmp(name, "fs_expansion")) {
@@ -4160,4 +4164,92 @@ TEST(menu_fdf, console_lan_and_lobby_commands_deliver_arguments) {
     Cmd_ExecuteString("menu_ingame");
     UI_ResetGlueSceneModels();
     mi = saved;
+}
+
+static int test_many_maps(cstring_t path,cstring_t ext,string_t out,int size) {
+    (void)path;int used=0;
+    if(strcmp(ext,".w3m")) return 0;
+    for(int i=0;i<40;i++) {
+        int n=snprintf(out+used,size-used,"Maps\\Melee\\Map%02d.w3m",i);
+        if(n<0 || n+1>size-used) return i;
+        used+=n+1;
+    }
+    return 40;
+}
+
+TEST(menu_fdf, custom_map_keyboard_selection_pages_and_bounds) {
+    menuImport_t saved=mi;test_glue_setup();mi.FS_GetFileList=test_many_maps;
+    Cmd_ExecuteString("menu_single_player_skirmish");test_glue_tick(1000);
+    frameDef_t *root=UI_FindFrame("LocalMultiplayerCreate");
+    frameDef_t *list=UI_FindChildFrame(root,"MapListBox");
+    T_NOT_NULL(list);
+    if(list) {
+        uiMapListState_t *state=list->MapListControl.State;T_NOT_NULL(state);
+        if(state) {
+            T_EQ(state->count,40);T_EQ(state->selected,0);
+            M_KeyEvent(SDLK_DOWN,0,true,1);T_EQ(state->selected,1);
+            M_KeyEvent(SDLK_DOWN,0,false,2);T_EQ(state->selected,1);
+            M_KeyEvent(SDLK_RIGHT,0,true,3);T_EQ(state->selected,15);
+            T_ASSERT(state->scroll<=state->selected && state->selected<state->scroll+14);
+            M_KeyEvent(SDLK_END,0,true,4);T_EQ(state->selected,39);
+            M_KeyEvent(SDLK_DOWN,0,true,5);T_EQ(state->selected,39);
+            M_KeyEvent(SDLK_PAGEUP,0,true,6);T_EQ(state->selected,25);
+            M_KeyEvent(SDLK_HOME,0,true,7);T_EQ(state->selected,0);T_EQ(state->scroll,0);
+            M_KeyEvent(SDLK_LEFT,0,true,8);T_EQ(state->selected,0);
+            M_KeyEvent(SDLK_PAGEDOWN,0,true,9);T_EQ(state->selected,14);
+        }
+    }
+    Cmd_ExecuteString("menu_ingame");mi=saved;
+}
+
+TEST(menu_fdf, custom_create_info_matches_lobby_column_and_stays_inside_pane) {
+    menuImport_t saved=mi;test_glue_setup();mi.FS_GetFileList=test_many_maps;
+    Cmd_ExecuteString("menu_single_player_skirmish");test_glue_tick(1000);
+    frameDef_t *root=UI_FindFrame("LocalMultiplayerCreate");
+    frameDef_t *container=UI_FindChildFrame(root,"MapInfoPaneContainer");
+    frameDef_t *pane=UI_FindChildFrame(container,"MapInfoPane");
+    T_NOT_NULL(container);T_NOT_NULL(pane);
+    if(container && pane) {
+        T_FEQ(container->Width,0.234375f,0.00001f);
+        T_FEQ(container->Points.x[FPP_MAX].offset,-0.025625f,0.00001f);
+        frameDef_t *description=UI_FindChildFrame(pane,"MapDescValue");
+        frameDef_t *label=UI_FindChildFrame(pane,"SuggestedPlayersLabel");
+        frameDef_t *value=UI_FindChildFrame(pane,"SuggestedPlayersValue");
+        T_ASSERT(description->Width<=container->Width-0.024f+0.00001f);
+        T_ASSERT(label->Width+value->Width<=container->Width-0.024f+0.00001f);
+        frameDef_t *button=UI_FindChildFrame(root,"MapInfoButton");
+        T_FEQ(button->Width,0.168f,0.00001f);
+    }
+    Cmd_ExecuteString("menu_ingame");mi=saved;
+}
+
+TEST(menu_fdf, map_browser_reload_rebinds_controls_and_preview_is_not_polled_per_frame) {
+    menuImport_t saved=mi;
+    for(int cycle=0;cycle<3;cycle++) {
+        test_glue_setup();mi.FS_GetFileList=test_many_maps;
+        Cmd_ExecuteString("menu_single_player_skirmish");test_glue_tick(1000);
+        frameDef_t *list=UI_FindChildFrame(UI_FindFrame("LocalMultiplayerCreate"),"MapListBox");
+        T_NOT_NULL(list);
+        if(list) {T_EQ(list->MapListControl.State->count,40);M_KeyEvent(SDLK_DOWN,0,true,0);T_EQ(list->MapListControl.State->selected,1);}
+        uint32_t reads=map_reads;test_glue_tick(33);test_glue_tick(33);T_EQ(map_reads,reads);
+        M_ShowGameSetupMenu();test_glue_tick(0);
+        T_NOT_NULL(UI_FindFrame("CreateGamePlayerSlot0"));
+        Cmd_ExecuteString("menu_game_setup_chat reload");
+        frameDef_t *chat=UI_FindFrame("GameSetupChatText");
+        T_NOT_NULL(chat);if(chat)T_ASSERT(strstr(chat->Text,"reload")!=NULL);
+        frameDef_t *row=UI_FindFrame("CreateGamePlayerSlot0");
+        Cmd_ExecuteString("menu_single_player_skirmish");test_glue_tick(1000);
+        M_ShowGameSetupMenu();test_glue_tick(0);
+        T_ASSERT(UI_FindFrame("CreateGamePlayerSlot0")==row);
+        T_ASSERT(UI_FindFrame("GameSetupChatText")==chat);
+        Cmd_ExecuteString("menu_ingame");
+    }
+    mi=saved;
+}
+TEST(menu_fdf, home_shows_application_version_when_supplied) {
+    menuImport_t saved=mi;test_glue_setup();test_app_version="Switch 0.1.6 - XiaoFan";
+    Cmd_ExecuteString("menu_main");test_glue_tick(1000);
+    frameDef_t *label=UI_FindChildFrame(UI_FindFrame("MainMenuFrame"),"ApplicationVersion");
+    T_NOT_NULL(label);if(label)T_STREQ(label->Text,test_app_version);
+    Cmd_ExecuteString("menu_ingame");test_app_version=NULL;mi=saved;
 }

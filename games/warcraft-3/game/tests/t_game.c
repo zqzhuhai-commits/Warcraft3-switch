@@ -6891,4 +6891,18 @@ TEST(wc3_test_utils, temp_paths_are_private_to_this_test_process) {
     T_EQ(remove(path), 0);
 }
 #endif
+
+TEST(wc3_game, cancel_selection_clears_membership_and_acknowledges_empty_set) {
+    reset_entities();setup_test_world();
+    edict_t *player=&g_edicts[0];gameClient_t *client=&game.clients[0];
+    player->client=client;client->ps.number=0;client->connected=true;client->ps.client_ui_state=CLIENT_UI_GAME;
+    edict_t *unit=alloc_test_unit(MAKEFOURCC('h','f','o','o'),0,0);unit->s.player=0;
+    G_SelectEntity(client,unit);T_ASSERT(G_IsEntitySelected(client,unit));
+    void (*old_write)(pfWriteType_t,void const *)=gi.Write;void (*old_unicast)(edict_t *)=gi.unicast;
+    selection_sync_stage=selection_sync_count=selection_sync_entity_index=0;
+    gi.Write=selection_test_write;gi.unicast=selection_test_unicast;
+    cstring_t args[]={"cancel_selection"};G_ClientCommand(player,1,args);
+    gi.Write=old_write;gi.unicast=old_unicast;
+    T_ASSERT(!G_IsEntitySelected(client,unit));T_EQ(selection_sync_count,0);
+}
 #endif

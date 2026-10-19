@@ -23,12 +23,12 @@ with tempfile.TemporaryDirectory(prefix='openrealm-nsp-') as tmp:
            '--romfsdir', str(base/'romfs'), '--controldir', str(base/'control'), '--nologo',
            '--nspdir', str(temp/'nsp'), '--ncadir', str(temp/'nca'),
            '--tempdir', str(temp/'work'), '--backupdir', str(temp/'backup')]
-    env = dict(os.environ, HACBREWPACK_TITLE_VERSION=str(5 << 16))
+    env = dict(os.environ, HACBREWPACK_TITLE_VERSION=str(6 << 16))
     result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
     files = list((temp/'nsp').glob('*.nsp'))
     if result.returncode or len(files) != 1:
         raise SystemExit('Packaging failed. Check local tools/keyset; tool output is withheld to protect key material.')
-    target = a.out/'魔兽争霸3冰封王座-Switch-0.1.5.nsp'
+    target = a.out/'魔兽争霸3冰封王座-Switch-0.1.6.nsp'
     shutil.copyfile(files[0], target)
     print(str(target))
     print('SHA256:', hashlib.sha256(target.read_bytes()).hexdigest())

@@ -1,10 +1,10 @@
 {
-  "nspSize": 7136472,
-  "sha256": "3b4a25dad31fb24af5dbcccfa250700f64216c2327f26334833acc0e2073c6a4",
+  "nspSize": 7143128,
+  "sha256": "fb58d72f7355b8c9944cd0060e78c4be4ffb0a8958abbb59d0f278a37e3bcd1e",
   "containerEntries": [
     {
-      "file": "dcec365ffe926799cdfe95023d262c38.nca",
-      "size": 5588992,
+      "file": "43aec18c47b36ddbdbc91e4ba47c5897.nca",
+      "size": 5595648,
       "hashChecks": [
         "Superblock Hash (GOOD)",
         "Hash Table (GOOD)",
@@ -14,16 +14,7 @@
       "toolExit": 0
     },
     {
-      "file": "12e5604b7a18c4a690db0ba00cf1f79d.nca",
-      "size": 1543168,
-      "hashChecks": [
-        "Superblock Hash (GOOD)"
-      ],
-      "hashFailures": [],
-      "toolExit": 0
-    },
-    {
-      "file": "670d6b9507db9c8b881d6b81fba21e2f.cnmt.nca",
+      "file": "a4cfc23aeab20768c4c09686caf6d3f3.cnmt.nca",
       "size": 4096,
       "hashChecks": [
         "Superblock Hash (GOOD)",
@@ -31,27 +22,48 @@
       ],
       "hashFailures": [],
       "toolExit": 0
+    },
+    {
+      "file": "5af74067b9f6d4d52605e74f0b911ea7.nca",
+      "size": 1543168,
+      "hashChecks": [
+        "Superblock Hash (GOOD)"
+      ],
+      "hashFailures": [],
+      "toolExit": 0
     }
   ],
   "hardwareTested": false,
   "retailDataIncluded": false,
-  "displayName": "魔兽争霸3冰封王座",
+  "version": "0.1.6",
+  "title": "魔兽争霸3冰封王座",
   "author": "小帆",
-  "version": "0.1.5",
-  "applicationContentVersion": 327680,
-  "verifiedLanguageRecords": 16,
-  "nroMetadataMatchesNsp": true,
-  "sdRoot": "sdmc:/switch/warcraft3",
-  "packagedLanguageIcons": 17,
-  "nsoSegments": [
-    ".text   (GOOD):             00000000-00635000",
-    ".rodata (GOOD):             00635000-00819000",
-    ".rwdata (GOOD):             00819000-008b4338"
+  "contentVersion": 393216,
+  "nsoHashChecks": [
+    ".text   (GOOD)",
+    ".rodata (GOOD)",
+    ".rwdata (GOOD)"
   ],
-  "keyboardAdapterTests": "silent repeated activation, focus backend hook, explicit dialog, UTF-8 chunking, cancellation, failure cleanup, chord edge/Plus binding suppression",
-  "keyboardShortcut": "Hold L then press Plus after focusing a text field",
-  "touchAdapterTests": "passed",
-  "controllerAdapterAssertions": 18,
-  "engineTextInputCall": "NX_StartTextInput",
-  "linkedBackendWrapper": "__wrap_SWITCH_StartTextInput"
+  "nroControlMetadataMatches": true,
+  "allLanguageNamesAndIconsMatch": true,
+  "packagedExecutableMatchesBuild": true,
+  "productionSourceMatchesBuild": true,
+  "customBlackMapsReproduced": false,
+  "checks": {
+    "switchCrossCompile": "passed",
+    "menuDebug": "118 tests, 1579 assertions passed",
+    "menuOptimized": "118 tests, 1579 assertions passed",
+    "clientCamera": "passed",
+    "warcraftEngine": "8 variants, 703 tests per variant passed",
+    "rendererModelTerrain": "183 tests, 9105 assertions passed",
+    "font": "3 tests, 43 assertions passed",
+    "switchInputTouchKeyboard": "passed",
+    "desktopWarcraftWowSc2Builds": "passed",
+    "fullMakeTest": "blocked by pre-existing test-linux-media-release QA: upstream release.yml absent"
+  },
+  "limitations": [
+    "Switch hardware retest pending",
+    "Specific user custom maps that load black not yet supplied/reproduced",
+    "Independent engine version, not a retail Warcraft patch; no artificial 4MiB archive limit; Lua map scripts unsupported"
+  ]
 }

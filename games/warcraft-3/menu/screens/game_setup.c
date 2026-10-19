@@ -90,6 +90,10 @@ static bool GameSetup_FixedPlayerSettings(void);
 
 static bool GameSetup_LoadScreen(void) {
     bool ok = true;
+    /* These clones belong to the template tree being replaced. */
+    memset(&setup.map_info_pane, 0, sizeof(setup.map_info_pane));
+    memset(setup.slots, 0, sizeof(setup.slots));
+    setup.chat_text = NULL;
 
     ok = GameChatroom_Load(&setup.frames) && ok;
     ok = PlayerSlot_Load(&setup.slot_template) && ok;
@@ -223,7 +227,8 @@ static frameDef_t *GameSetup_EnsureChatText(void) {
     if (!setup.frames.ChatTextArea) {
         return NULL;
     }
-    setup.chat_text = UI_Spawn(FT_TEXT, setup.frames.ChatTextArea);
+    setup.chat_text = UI_FindChildFrame(setup.frames.ChatTextArea, "GameSetupChatText");
+    if (!setup.chat_text) setup.chat_text = UI_Spawn(FT_TEXT, setup.frames.ChatTextArea);
     if (!setup.chat_text) {
         return NULL;
     }
@@ -376,7 +381,10 @@ static void GameSetup_BuildSlotRows(void) {
         gameSetupSlotRow_t *slot = &setup.slots[i];
         frameDef_t *row;
 
-        row = UI_CloneFrameTree(setup.slot_template.PlayerSlot, setup.team_container);
+        char name[64];
+        snprintf(name, sizeof(name), "CreateGamePlayerSlot%u", (unsigned)i);
+        row = UI_FindChildFrame(setup.team_container, name);
+        if (!row) row = UI_CloneFrameTree(setup.slot_template.PlayerSlot, setup.team_container);
         if (!row || !PlayerSlot_Bind(&slot->frames, row)) {
             return;
         }
@@ -765,7 +773,8 @@ static void GameSetup_BindMapInfoPane(frameDef_t *container) {
         return;
     }
 
-    root = UI_CloneFrameTree(setup.map_info_template.MapInfoPane, container);
+    root = UI_FindChildFrame(container, "MapInfoPane");
+    if (!root) root = UI_CloneFrameTree(setup.map_info_template.MapInfoPane, container);
     if (!root || !MapInfoPane_Bind(&setup.map_info_pane, root)) {
         return;
     }
@@ -918,9 +927,7 @@ static void GameSetup_BuildFrames(void) {
 
 static void GameSetup_Init(void) {
     mi.Printf("GameSetup_Init\n");
-    if (!setup.root) {
-        GameSetup_BuildFrames();
-    }
+    GameSetup_BuildFrames();
     if (!setup.ready) {
         return;
     }

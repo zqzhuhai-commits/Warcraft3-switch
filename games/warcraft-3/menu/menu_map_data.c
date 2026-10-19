@@ -256,6 +256,7 @@ static bool UI_OpenMapArchive(cstring_t mapFilename, handle_t *mapArchive, void 
     mapSize = mi.FS_ReadFile(mapFilename, mapData);
     if (!*mapData || mapSize <= 0)
         return false;
+    fprintf(stderr,"Map archive: %s bytes=%d\n",mapFilename,mapSize);
     if (!SFileOpenArchiveFromMemory(*mapData, (uint32_t)mapSize, 0, mapArchive)) {
         mi.FS_FreeFile(*mapData);
         *mapData = NULL;
@@ -277,6 +278,13 @@ bool UI_ReadMapInfo(cstring_t mapFilename, mapInfo_t *info) {
         SFileCloseArchive(mapArchive);
         mi.FS_FreeFile(mapData);
         return false;
+    }
+    fprintf(stderr,"Map metadata: %s format=%u editor=%u game=%u.%u.%u.%u\n",mapFilename,
+            info->fileFormat,info->editorVersion,info->gameVersionMajor,info->gameVersionMinor,info->gameVersionPatch,info->gameVersionBuild);
+    handle_t lua;
+    if(SFileOpenFileEx(mapArchive,"war3map.lua",SFILE_OPEN_FROM_MPQ,&lua)) {
+        fprintf(stderr,"Map compatibility: Lua script detected; Lua maps are not implemented by this engine\n");
+        SFileCloseFile(lua);
     }
     UI_ReadStringsInto(mapArchive, info);
     SFileCloseArchive(mapArchive);

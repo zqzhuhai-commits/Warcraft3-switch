@@ -748,27 +748,32 @@ static bool R_ReadWar3MapVertex(handle_t file, war3mapVertex_t *vert) {
 
 war3map_t *FileReadWar3Map(handle_t archive) {
     war3map_t *map = ri.MemAlloc(sizeof(war3map_t));
-    handle_t file;
-    SFileOpenFileEx(archive, "war3map.w3e", SFILE_OPEN_FROM_MPQ, &file);
-    SFileReadFile(file, &map->header, 4, NULL, NULL);
-    SFileReadFile(file, &map->version, 4, NULL, NULL);
-    SFileReadFile(file, &map->tileset, 1, NULL, NULL);
-    SFileReadFile(file, &map->custom, 4, NULL, NULL);
-    SFileReadArray(file, map, grounds, 4, ri.MemAlloc);
-    SFileReadArray(file, map, cliffs, 4, ri.MemAlloc);
-    SFileReadFile(file, &map->width, 4, NULL, NULL);
-    SFileReadFile(file, &map->height, 4, NULL, NULL);
-    SFileReadFile(file, &map->center, 8, NULL, NULL);
-    uint32_t const num_vertices = map->width * map->height;
-    int const vertexblocksize = sizeof(war3mapVertex_t) * num_vertices;
-    map->vertices = ri.MemAlloc(vertexblocksize);
-    R_AllocateFogOfWar(map);
-    FOR_LOOP(i, num_vertices) {
-        if (!R_ReadWar3MapVertex(file, (war3mapVertex_t *)map->vertices + i)) {
-            break;
-        }
+    memset(map,0,sizeof(*map));
+    handle_t file=NULL;
+    if(!SFileOpenFileEx(archive,"war3map.w3e",SFILE_OPEN_FROM_MPQ,&file))goto invalid;
+    uint32_t bytes=SFileGetFileSize(file,NULL);
+#define READ_TERRAIN(FIELD) if(!SFileReadFile(file,&map->FIELD,sizeof(map->FIELD),NULL,NULL))goto invalid
+    READ_TERRAIN(header);READ_TERRAIN(version);READ_TERRAIN(tileset);READ_TERRAIN(custom);
+    if(map->header!=MAKEFOURCC('W','3','E','!'))goto invalid;
+    READ_TERRAIN(num_grounds);if(map->num_grounds>16)goto invalid;
+    if(map->num_grounds) {
+        map->grounds=ri.MemAlloc(4*map->num_grounds);
+        if(!SFileReadFile(file,map->grounds,4*map->num_grounds,NULL,NULL))goto invalid;
     }
-    SFileCloseFile(file);
+    READ_TERRAIN(num_cliffs);if(map->num_cliffs>16)goto invalid;
+    if(map->num_cliffs) {
+        map->cliffs=ri.MemAlloc(4*map->num_cliffs);
+        if(!SFileReadFile(file,map->cliffs,4*map->num_cliffs,NULL,NULL))goto invalid;
+    }
+    READ_TERRAIN(width);READ_TERRAIN(height);READ_TERRAIN(center);
+#undef READ_TERRAIN
+    if(!R_W3TerrainPayloadFits(map->width,map->height,map->num_grounds,map->num_cliffs,bytes))goto invalid;
+    fprintf(stderr,"Map terrain: version=%u corners=%ux%u bytes=%u\n",map->version,map->width,map->height,bytes);
+    uint32_t const num_vertices=map->width*map->height;
+    map->vertices=ri.MemAlloc(sizeof(war3mapVertex_t)*num_vertices);
+    FOR_LOOP(i,num_vertices)if(!R_ReadWar3MapVertex(file,(war3mapVertex_t *)map->vertices+i))goto invalid;
+    SFileCloseFile(file);file=NULL;
+    R_AllocateFogOfWar(map);
     FOR_LOOP(y, map->height) {
 //        printf("%04x  ", y);
         FOR_LOOP(x, map->width) {
@@ -794,6 +799,11 @@ war3map_t *FileReadWar3Map(handle_t archive) {
 //        printf("\n");
     }
     return map;
+invalid:
+    if(file)SFileCloseFile(file);
+    R_FreeWar3Map(map);
+    fprintf(stderr,"Map terrain: missing, unsupported or truncated war3map.w3e\n");
+    return NULL;
 }
 
 void _W3M_RegisterMap(char const *mapFilename) {
@@ -820,7 +830,12 @@ void _W3M_RegisterMap(char const *mapFilename) {
         ri.error("R_RegisterMap: failed to open map archive %s\n", mapFilename);
         return;
     }
+    fprintf(stderr,"Map load: archive=%s bytes=%d\n",mapFilename,mapSize);
     map = FileReadWar3Map(hMpq);
+    if(!map) {
+        SFileCloseArchive(hMpq);ri.FS_FreeFile(mapData);
+        ri.error("Map %s has missing or invalid terrain; see warcraft3.log\n",mapFilename);return;
+    }
     R_FileReadShadowMap(hMpq, map);
     R_LoadMapMinimap(hMpq, mapFilename);
     tr.world = map;

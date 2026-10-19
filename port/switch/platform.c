@@ -27,20 +27,30 @@ void NX_TouchPointer(int x,int y) {
 static Uint32 previous;
 static u64 last_buttons;
 static bool keyboard_chord;
-static bool cam_keys[4];
+static bool cam_keys[4], menu_input;
+static float camera_x,camera_y;
+void NX_SetMenuInput(int enabled) { menu_input=enabled!=0; }
+void NX_GetCameraAxes(float *x,float *y) { *x=camera_x;*y=camera_y; }
+static float NX_Axis(int value) {
+    float v=fabsf((float)value);
+    return v<=NX_DEADZONE ? 0.0f : copysignf((v-NX_DEADZONE)/(32767.0f-NX_DEADZONE),(float)value);
+}
 extern int OpenRealm_Main(int argc, char **argv);
 
 /* Keep push-based engine input and bind dispatch unchanged. */
-static void NX_Key(SDL_Keycode key, bool down, SDL_Keymod mods) {
+static void NX_KeyRepeat(SDL_Keycode key, bool down, SDL_Keymod mods,bool repeat) {
     SDL_Event ev = {0};
     ev.type = down ? SDL_KEYDOWN : SDL_KEYUP;
     ev.key.timestamp = SDL_GetTicks();
+    ev.key.repeat=repeat;
     ev.key.state = down ? SDL_PRESSED : SDL_RELEASED;
     ev.key.keysym.sym = key;
     ev.key.keysym.scancode = SDL_GetScancodeFromKey(key);
     ev.key.keysym.mod = mods;
     SDL_PushEvent(&ev);
 }
+
+static void NX_Key(SDL_Keycode key,bool down,SDL_Keymod mods) { NX_KeyRepeat(key,down,mods,false); }
 
 /* Merge controller and touchscreen ownership: either may keep a drag held. */
 static unsigned mouse_sources[8];
@@ -106,17 +116,45 @@ void NX_PumpInput(void) {
         {HidNpadButton_Left,SDLK_TAB},{HidNpadButton_Right,SDLK_SPACE},
         {HidNpadButton_StickL,SDLK_F6},{HidNpadButton_StickR,SDLK_F12}
     };
-    for (unsigned i = 0; i < sizeof(keys)/sizeof(keys[0]); i++)
-        if (changed & keys[i].bit) NX_Key(keys[i].key, (held & keys[i].bit) != 0, mods);
-    bool next[] = {right.x < -NX_DEADZONE,right.x > NX_DEADZONE,right.y > NX_DEADZONE,right.y < -NX_DEADZONE};
+    static SDL_Keycode active_keys[sizeof(keys)/sizeof(keys[0])];
+    static Uint32 repeat_at[sizeof(keys)/sizeof(keys[0])];
+    for(unsigned i=0;i<sizeof(keys)/sizeof(keys[0]);i++) {
+        SDL_Keycode key=keys[i].key;
+        bool direction=keys[i].bit==HidNpadButton_Up || keys[i].bit==HidNpadButton_Down ||
+                       keys[i].bit==HidNpadButton_Left || keys[i].bit==HidNpadButton_Right;
+        if(menu_input) {
+            if(keys[i].bit==HidNpadButton_Up)key=SDLK_UP;
+            if(keys[i].bit==HidNpadButton_Down)key=SDLK_DOWN;
+            if(keys[i].bit==HidNpadButton_Left)key=SDLK_LEFT;
+            if(keys[i].bit==HidNpadButton_Right)key=SDLK_RIGHT;
+            if(keys[i].bit==HidNpadButton_X)key=SDLK_RETURN;
+        }
+        SDL_Keycode next=(held & keys[i].bit) ? key : 0;
+        if(next!=active_keys[i]) {
+            if(active_keys[i])NX_Key(active_keys[i],false,mods);
+            if(next)NX_Key(next,true,mods);
+            active_keys[i]=next;repeat_at[i]=now+350;
+        } else if(next && menu_input && direction && (Sint32)(now-repeat_at[i])>=0) {
+            NX_KeyRepeat(next,true,mods,true);repeat_at[i]=now+90;
+        }
+    }
+    /* Analog displacement, not full-speed arrow pulses. */
+    float target_x=menu_input ? 0.0f : NX_Axis(right.x), target_y=menu_input ? 0.0f : NX_Axis(right.y);
+    float length=hypotf(target_x,target_y);
+    if(length>1.0f) {target_x/=length;target_y/=length;}
+    float alpha=1.0f-expf(-dt/0.045f);
+    camera_x+=alpha*(target_x-camera_x);camera_y+=alpha*(target_y-camera_y);
+    if(menu_input || (target_x==0 && fabsf(camera_x)<0.005f))camera_x=0;
+    if(menu_input || (target_y==0 && fabsf(camera_y)<0.005f))camera_y=0;
+    bool next[] = {menu_input && right.x < -NX_DEADZONE,menu_input && right.x > NX_DEADZONE,
+                   menu_input && right.y > NX_DEADZONE,menu_input && right.y < -NX_DEADZONE};
     SDL_Keycode arrows[] = {SDLK_LEFT,SDLK_RIGHT,SDLK_UP,SDLK_DOWN};
-    for (int i = 0; i < 4; i++) {
-        if (next[i] != cam_keys[i]) NX_Key(arrows[i], next[i], KMOD_NONE);
-        cam_keys[i] = next[i];
+    for(int i=0;i<4;i++) {
+        if(next[i]!=cam_keys[i])NX_Key(arrows[i],next[i],KMOD_NONE);
+        cam_keys[i]=next[i];
     }
     if(win) {
-        int w,h;SDL_GetWindowSize(win,&w,&h);
-        NX_TouchFrame(win,now,w,h);
+        int w,h;SDL_GetWindowSize(win,&w,&h);NX_TouchFrame(win,now,w,h);
     } else NX_TouchCancel();
     last_buttons = held;
 }
@@ -170,8 +208,8 @@ int main(int argc, char **argv) {
     char *args[128] = {"warcraft3","-data","sdmc:/switch/warcraft3/data",NX_HasArchive("war3x.mpq") ? "-tft" : "-roc"};
     int count = 4;
     /* Preserve hbmenu arguments after defaults so explicit launch settings still work. */
-    for (int i = 1; i < argc && count < 110; i++) args[count++] = argv[i];
-    char *video[] = {"+set","com_maxfps","30","+set","r_vsync","1","+set","vid_native","0","+set","vid_mode","4"};
+    for (int i = 1; i < argc && count < 88; i++) args[count++] = argv[i];
+    char *video[] = {"+set","com_maxfps","30","+set","r_vsync","1","+set","vid_native","0","+set","vid_mode","4","+set","ui_app_version","Switch 0.1.6 - XiaoFan","+set","cl_touch_pick_radius","14","+bind","ESCAPE","cmd cancel_selection"};
     for (unsigned i = 0; i < sizeof(video)/sizeof(video[0]); i++) args[count++] = video[i];
     args[count] = NULL;
     NX_InitInput();

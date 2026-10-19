@@ -3,6 +3,7 @@
  */
 
 #include <stdlib.h>
+#include <SDL2/SDL_keycode.h>
 
 #ifndef _WIN32
 #include <strings.h>
@@ -38,6 +39,9 @@ typedef struct lan_join_state_s {
     lanMode_t mode;
     uiMapListState_t games;
     uiMapListState_t maps;
+    bool parsed_maps[UI_MAX_MAP_LIST_ITEMS];
+    bool displayed_valid[2];
+    uiMapListItem_t displayed[2];
     bool ready;
     frameDef_t *root;
     frameDef_t *join_button;
@@ -66,6 +70,12 @@ static lan_join_state_t lan;
 
 static bool LANJoin_LoadScreen(void) {
     bool ok = true;
+    /* Template reload invalidates the cloned controls, not just the roots. */
+    memset(lan.displayed_valid,0,sizeof(lan.displayed_valid));
+    memset(&lan.game_list_box,0,sizeof(lan.game_list_box));
+    memset(&lan.create_map_list_box,0,sizeof(lan.create_map_list_box));
+    memset(&lan.game_map_info_pane,0,sizeof(lan.game_map_info_pane));
+    memset(&lan.create_map_info_pane,0,sizeof(lan.create_map_info_pane));
 
     ok = UI_EnsureFDF("UI\\FrameDef\\GlobalStrings.fdf") && ok;
     ok = UI_EnsureFDF("UI\\FrameDef\\Glue\\StandardTemplates.fdf") && ok;
@@ -222,7 +232,7 @@ static void LAN_AddMap(cstring_t path) {
     snprintf(item->suggestedPlayers, sizeof(item->suggestedPlayers), "%s", UI_GetString("UNKNOWNMAP_SUGGESTEDPLAYERS"));
     snprintf(item->mapSize, sizeof(item->mapSize), "%s", UI_GetString("UNKNOWNMAP_MAPSIZE"));
     snprintf(item->tileset, sizeof(item->tileset), "%s", UI_GetString("UNKNOWNMAP_TILESET"));
-    LAN_ParseMapInfo(item);
+    /* Read archive metadata lazily for the selected row, not every SD map. */
 }
 
 static int LAN_CompareMaps(void const *a, void const *b) {
@@ -255,6 +265,8 @@ static void LAN_LoadMapsWithExtension(cstring_t extension) {
 
 static void LAN_LoadMaps(void) {
     memset(&lan.maps, 0, sizeof(lan.maps));
+    memset(lan.parsed_maps,0,sizeof(lan.parsed_maps));
+    lan.displayed_valid[1]=false;
     LAN_LoadMapsWithExtension(".w3m");
     LAN_LoadMapsWithExtension(".w3x");
     qsort(lan.maps.items, lan.maps.count, sizeof(lan.maps.items[0]), LAN_CompareMaps);
@@ -358,7 +370,8 @@ static void LAN_BindMapInfoPane(frameDef_t *container, MapInfoPane_t *pane) {
         return;
     }
 
-    root = UI_CloneFrameTree(lan.map_info_template.MapInfoPane, container);
+    root = UI_FindChildFrame(container, "MapInfoPane");
+    if (!root) root = UI_CloneFrameTree(lan.map_info_template.MapInfoPane, container);
     if (!root || !MapInfoPane_Bind(pane, root)) {
         return;
     }
@@ -381,7 +394,8 @@ static void LAN_CreateMapListFrame(frameDef_t *container,
         mi.Printf("LAN_CreateMapListFrame: MapListBox missing\n");
         return;
     }
-    root = UI_CloneFrameTree(lan.map_list_template.MapListBox, container);
+    root = UI_FindChildFrame(container, "MapListBox");
+    if (!root) root = UI_CloneFrameTree(lan.map_list_template.MapListBox, container);
     if (!root || !MapListBox_Bind(list_box, root)) {
         return;
     }
@@ -397,6 +411,7 @@ static void LAN_UpdateMapInfo(MapInfoPane_t *pane, uiMapListState_t *items) {
         return;
     }
     if (items->count == 0 || items->selected >= items->count) {
+        lan.displayed_valid[items==&lan.maps ? 1 : 0]=false;
         UI_SetHidden(pane->MinimapImage, true);
         LAN_SetTextIfPresent(pane->MaxPlayersValue, " ");
         LAN_SetTextIfPresent(pane->MapNameValue, " ");
@@ -408,6 +423,13 @@ static void LAN_UpdateMapInfo(MapInfoPane_t *pane, uiMapListState_t *items) {
     }
 
     item = &items->items[items->selected];
+    unsigned cache=items==&lan.maps ? 1 : 0;
+    if(cache && !lan.parsed_maps[items->selected]) {
+        lan.parsed_maps[items->selected]=true;
+        LAN_ParseMapInfo(item);
+    }
+    if(lan.displayed_valid[cache] && !memcmp(&lan.displayed[cache],item,sizeof(*item))) return;
+    lan.displayed[cache]=*item;lan.displayed_valid[cache]=true;
     if (pane->MinimapImage) {
         PATHSTR preview;
 
@@ -645,6 +667,24 @@ static bool LAN_BuildCreateFrames(void) {
     lan.game_speed_slider = lan.create_frames.GameSpeedSlider;
     lan.game_speed_value = lan.create_frames.GameSpeedValue;
 
+    /* Match the right-column geometry of GameChatroom, inside the chrome. */
+    frameDef_t *info=lan.create_frames.MapInfoPaneContainer;
+    if(info) {
+        info->AnyPointsSet=false;UI_SetSize(info,0.234375f,0.323125f);
+        UI_SetPoint(info,FRAMEPOINT_TOPRIGHT,lan.root,FRAMEPOINT_TOPRIGHT,-0.025625f,-0.05625f);
+    }
+    frameDef_t *backs[]={lan.create_frames.MapInfoBackdrop,lan.create_frames.AdvancedOptionsBackdrop};
+    frameDef_t *buttons[]={lan.create_frames.MapInfoButton,lan.create_frames.AdvancedOptionsButton};
+    for(unsigned i=0;i<2;i++) {
+        if(backs[i]) {
+            backs[i]->AnyPointsSet=false;UI_SetSize(backs[i],0.24f,backs[i]->Height);
+            UI_SetPoint(backs[i],FRAMEPOINT_TOPRIGHT,lan.root,FRAMEPOINT_TOPRIGHT,-0.014375f,-0.38f);
+        }
+        if(buttons[i] && backs[i]) {
+            buttons[i]->AnyPointsSet=false;UI_SetSize(buttons[i],0.168f,buttons[i]->Height);
+            UI_SetPoint(buttons[i],FRAMEPOINT_TOPRIGHT,backs[i],FRAMEPOINT_TOPRIGHT,-0.012f,-0.0165f);
+        }
+    }
     LAN_CreateMapListFrame(lan.create_frames.MapListContainer,
                            lan.create_frames.MapListLabel,
                            &lan.create_map_list_box,
@@ -734,14 +774,31 @@ static void LANJoin_Draw(void) {
 }
 
 static void LANJoin_KeyEvent(int key, bool down) {
-    if (!down) {
+    if(!down || !lan.ready || UI_HasActivePopup()) return;
+    if(lan.mode==LAN_MODE_BROWSER && UI_EditHasFocus(lan.join_frames.PlayerNameEditBox)) {
+        if(key==SDLK_RETURN || key==SDLK_KP_ENTER) {LAN_ApplyPlayerName();UI_ClearEditFocus();}
         return;
     }
-    if ((key == SDLK_RETURN || key == SDLK_KP_ENTER) &&
-        UI_EditHasFocus(lan.join_frames.PlayerNameEditBox)) {
-        LAN_ApplyPlayerName();
-        UI_ClearEditFocus();
+    uiMapListState_t *list=lan.mode==LAN_MODE_BROWSER ? &lan.games : &lan.maps;
+    int page=lan.mode==LAN_MODE_BROWSER ? LAN_VISIBLE_GAMES : LAN_VISIBLE_MAPS;
+    if(key==SDLK_ESCAPE) {
+        frameDef_t *cancel=lan.mode==LAN_MODE_BROWSER ? lan.join_frames.CancelButton : lan.create_frames.CancelButton;
+        if(cancel) UI_QueueCommand(cancel->OnClick);
+        return;
     }
+    if(!list->count) return;
+    int next=(int)list->selected;
+    switch(key) {
+        case SDLK_UP:next--;break;case SDLK_DOWN:next++;break;
+        case SDLK_LEFT:case SDLK_PAGEUP:next-=page;break;
+        case SDLK_RIGHT:case SDLK_PAGEDOWN:next+=page;break;
+        case SDLK_HOME:next=0;break;case SDLK_END:next=list->count-1;break;
+        case SDLK_RETURN:case SDLK_KP_ENTER:
+            UI_QueueCommand(lan.mode==LAN_MODE_BROWSER ? "menu_lan_join" : "menu_lan_start");return;
+        default:return;
+    }
+    LAN_SelectMapIndex((uint32_t)MAX(0,MIN((int)list->count-1,next)));
+    list->visualScroll=(float)list->scroll;
 }
 
 cstring_t LAN_SelectedMapPath(void) {
