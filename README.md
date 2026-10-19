@@ -1,4 +1,4 @@
-# Warcraft3-switch / OpenRealm
+# 魔兽争霸3冰封王座 / Switch
 
 《魔兽争霸 III》OpenRealm 引擎的 Nintendo Switch 原生移植测试版。
 
@@ -12,7 +12,7 @@
 ## 下载与安装
 
 从本仓库的 [Releases](https://github.com/zqzhuhai-commits/Warcraft3-switch/releases)
-下载 `OpenRealm-Switch-0.1.3-preview.nsp`。这是包含原生引擎的完整应用包，不是 NRO 前端。
+下载 `魔兽争霸3冰封王座-Switch-0.1.4.nsp`。这是包含原生引擎的完整应用包，不是 NRO 前端。
 也提供 NRO 作为备用运行方式；NRO 需使用完整应用内存模式，不支持相册 Applet 模式。
 
 1. 将你拥有的 **Warcraft III Classic 的 MPQ 文件**放到 SD 卡目录：
@@ -57,7 +57,8 @@
 
 - devkitA64 / libnx / SDL2 / switch-mesa 原生交叉编译，静态链接完整引擎。
 - NSP 容器与内容文件摘要检查；NCA 解密及哈希验证。
-- 原生测试套件：33 份报告、6,949 个测试、0 个失败；Switch 手柄、触屏事件与文件系统适配器测试通过。
+- 原生测试套件：34 份报告、6,952 个测试、0 个失败；Switch 手柄、触屏事件与文件系统适配器测试通过。
+- 中文段落横向换行、英文长词、颜色控制、显式换行的生产渲染布局测试通过（调试及优化构建）。
 - 未改动网络消息布局、实体/玩家状态或存档格式。
 
 ## 尚未验证与限制
@@ -76,6 +77,8 @@
 make font
 python3 port/switch/build.py
 # 本地安装 hacbrewpack 并准备自己的私有 keyset 后：
+python3 port/switch/patch-hacbrewpack.py /path/to/hacBrewPack
+make -C /path/to/hacBrewPack
 python3 port/switch/package.py --keyset /private/path/prod.keys
 ```
 

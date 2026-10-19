@@ -13,9 +13,11 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - name: Install SDL development headers
-        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev libgl1-mesa-dev pkg-config
       - name: Check production controller and touchscreen adapter
-        run: sh port/switch/tests/run-input.sh
+        run: |
+          sh port/switch/tests/run-input.sh
+          make test-font
   build:
     runs-on: ubuntu-24.04
     container: devkitpro/devkita64:latest

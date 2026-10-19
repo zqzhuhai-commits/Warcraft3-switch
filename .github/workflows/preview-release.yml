@@ -19,4 +19,4 @@ jobs:
       - name: Publish experimental build
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create v0.1.3-preview --target "$GITHUB_SHA" --prerelease --title "OpenRealm Switch 0.1.3 Preview" --notes-file RELEASE.md release-assets/*
+        run: gh release create v0.1.4-preview --target "$GITHUB_SHA" --prerelease --title "魔兽争霸3冰封王座 Switch 0.1.4" --notes-file RELEASE.md release-assets/*

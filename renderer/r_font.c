@@ -209,23 +209,23 @@ float R_GetFontHeight(font_t *font) {
     return FONT_SCALE * INV_SCALE_Y(font->height);
 }
 
-bool will_word_fit(cstring_t text, float width, font_t const *font) {
-    cstring_t p = text;
-    for (; *p && !isspace(*p) && *p != '|';) {
+/* CJK scripts allow breaks between glyphs without ASCII spaces. */
+static bool R_TextGlyphBreak(unsigned codepoint) {
+    return (codepoint >= 0x2e80 && codepoint <= 0x9fff) ||
+           (codepoint >= 0xac00 && codepoint <= 0xd7af) ||
+           (codepoint >= 0xf900 && codepoint <= 0xfaff) ||
+           (codepoint >= 0xff00 && codepoint <= 0xffef);
+}
+
+static bool will_word_fit(cstring_t text, float width, font_t const *font) {
+    for (cstring_t p = text; *p && !isspace((unsigned char)*p) && *p != '|';) {
         unsigned codepoint;
         p = utf8_to_codepoint(p, &codepoint);
+        if (R_TextGlyphBreak(codepoint)) break;
         glyphSet_t *set = R_GetGlyphSet((font_t *)font, codepoint);
-        stbtt_bakedchar *g = &set->glyphs[codepoint & 0xff];
-        width -= INV_SCALE_X(g->xadvance);
+        width -= INV_SCALE_X(set->glyphs[codepoint & 0xff].xadvance);
+        if (!R_TextFitsWidth(width)) return false;
     }
-    for (; *p && isspace(*p) && *p != '\n';) {
-        unsigned codepoint;
-        p = utf8_to_codepoint(p, &codepoint);
-        glyphSet_t *set = R_GetGlyphSet((font_t *)font, codepoint);
-        stbtt_bakedchar *g = &set->glyphs[codepoint & 0xff];
-        width -= INV_SCALE_X(g->xadvance);
-    }
-    /* Measurement and drawing subtract the same advances in different orders; tolerate sub-pixel residue. */
     return R_TextFitsWidth(width);
 }
 
@@ -326,8 +326,10 @@ static vec2_t process_text(drawText_t const *arg, bool draw) {
         batch = ri.MemAlloc(sizeof(*batch));
         memset(batch, 0, sizeof(*batch));
     }
+    bool word_start = true;
     for (cstring_t p = arg->text; *p;) {
         if (*p == '\n') {
+            word_start = true;
             cursor.x = pos.x;
             cursor.y += line_advance;
             max_cursor_y = MAX(max_cursor_y, cursor.y);
@@ -336,6 +338,7 @@ static vec2_t process_text(drawText_t const *arg, bool draw) {
         }
         if (!strncmp(p, "|n", 2) || !strncmp(p, "|N", 2)) {
         // next_line:
+            word_start = true;
             cursor.x = pos.x;
             cursor.y += line_advance;
             max_cursor_y = MAX(max_cursor_y, cursor.y);
@@ -386,15 +389,29 @@ static vec2_t process_text(drawText_t const *arg, bool draw) {
             p += 10;
             continue;
         }
-        if ((arg->flags & DRAW_WORD_WRAP) && cursor.x > pos.x && !will_word_fit(p, arg->textWidth - (cursor.x - pos.x), arg->font)) {
-            cursor.x = pos.x;
-            cursor.y += line_advance;
-            max_cursor_y = MAX(max_cursor_y, cursor.y);
-        }
+        cstring_t glyph_start = p;
         unsigned codepoint;
         p = utf8_to_codepoint(p, &codepoint);
         glyphSet_t *set = R_GetGlyphSet((font_t *)arg->font, codepoint);
         stbtt_bakedchar *g = &set->glyphs[codepoint & 0xff];
+        float advance = INV_SCALE_X(g->xadvance);
+        if ((arg->flags & DRAW_WORD_WRAP) && cursor.x > pos.x) {
+            float remaining = arg->textWidth - (cursor.x - pos.x);
+            /* Look ahead only at word boundaries. Oversized tokens and CJK
+             * fall back to glyph fit, rather than wrapping every suffix. */
+            bool move_word = word_start && !R_TextGlyphBreak(codepoint) &&
+                !isspace((unsigned char)*glyph_start) &&
+                will_word_fit(glyph_start, arg->textWidth, arg->font) &&
+                !will_word_fit(glyph_start, remaining, arg->font);
+            if (move_word || !R_TextFitsWidth(remaining - advance)) {
+                cursor.x = pos.x;
+                cursor.y += line_advance;
+                max_cursor_y = MAX(max_cursor_y, cursor.y);
+                if (codepoint == ' ' || codepoint == '\t') { word_start = true; continue; }
+            }
+        }
+        word_start = R_TextGlyphBreak(codepoint) ||
+            (codepoint < 128 && isspace((unsigned char)codepoint));
         if (draw) {
             float const w = set->image->width;
             float const h = set->image->height;

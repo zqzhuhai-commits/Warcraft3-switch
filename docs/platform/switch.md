@@ -7,6 +7,13 @@ The upstream revision is `8853d069c21c94a981121066e1d78e967676fae4`.
 
 The application NACP title is `魔兽争霸3冰封王座`, publisher/author `小帆`.
 These are display metadata; the upstream MIT attribution remains in source.
+Package files use `魔兽争霸3冰封王座-Switch-<version>.nsp` / `.nro`.
+The internal NPDM process name is `warcraft3`.
+For versioned replacement, run `python3 port/switch/patch-hacbrewpack.py /path/to/hacBrewPack`
+and rebuild that tool. `package.py` sets `HACBREWPACK_TITLE_VERSION=262144`
+(application version 4; earlier preview packages used CNMT version 0).
+The NACP display version is 0.1.4. Existing folders created by the system or
+other file managers are not automatically renamed by changing the NACP.
 The build fills all 16 NACP language records and enables their language mask,
 because older nacptool versions initialize only 12 records.
 
@@ -134,3 +141,18 @@ Do not label the preview hardware-tested without that evidence.
 
 See also [build platforms](../build-and-renderer-platforms.md) and
 [runtime paths](../architecture/runtime.md).
+
+## Text wrapping regression
+
+The screenshots showed readable CJK glyphs but one glyph per line in long
+loading/tooltip paragraphs. `renderer/r_font.c` tested the entire remaining
+non-space suffix before every glyph; a Chinese paragraph is one oversized
+word, so it wrapped repeatedly until its final suffix fit. The same error
+affected long ASCII tokens. The fix considers Latin word lookahead only at
+word boundaries and only if the token fits a whole line. CJK uses per-glyph
+fit, as do oversized Latin tokens. Measurement and drawing share this path.
+`make test-font` exercises the production renderer with synthetic glyph metrics
+and checks measured height and submitted glyph positions, without a GPU or
+retail font. It covers color controls, explicit newlines and disabled wrapping.
+The user's screenshots establish real map rendering, but do not establish
+this new layout's hardware appearance.

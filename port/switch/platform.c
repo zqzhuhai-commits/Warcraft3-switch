@@ -127,7 +127,7 @@ static bool NX_HasArchive(char const *name) {
 /* Display a recoverable first-run screen instead of exiting without explanation. */
 static void NX_Error(char const *message) {
     consoleInit(NULL);
-    printf("\x1b[2;2HOpenRealm / Warcraft III - Switch preview\n\n%s\n\n", message);
+    printf("\x1b[2;2HWarcraft III - Switch / XiaoFan\n\n%s\n\n", message);
     printf("Copy your original Classic MPQ files to:\n sd:/switch/warcraft3/data/\n\nWar3.mpq + War3Local.mpq\nOptional: War3x.mpq + War3xLocal.mpq\n\nPress B to exit.\n");
     while (appletMainLoop()) {
         padUpdate(&pad);
@@ -161,7 +161,7 @@ int main(int argc, char **argv) {
     if (!NX_HasArchive("war3.mpq")) { NX_Error("Warcraft III data not found."); return 1; }
     freopen("sdmc:/switch/warcraft3/warcraft3.log","w",stderr); setvbuf(stderr,NULL,_IONBF,0);
     chdir("sdmc:/switch/warcraft3");
-    char *args[128] = {"openrealm","-data","sdmc:/switch/warcraft3/data",NX_HasArchive("war3x.mpq") ? "-tft" : "-roc"};
+    char *args[128] = {"warcraft3","-data","sdmc:/switch/warcraft3/data",NX_HasArchive("war3x.mpq") ? "-tft" : "-roc"};
     int count = 4;
     /* Preserve hbmenu arguments after defaults so explicit launch settings still work. */
     for (int i = 1; i < argc && count < 110; i++) args[count++] = argv[i];

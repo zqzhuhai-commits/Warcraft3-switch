@@ -547,3 +547,7 @@ else
 test-sc2api-transport:
 	@echo "test-sc2api-transport requires SC2API=1" >&2; exit 1
 endif
+
+# Headless production font layout regression coverage (synthetic metrics).
+$(eval $(call test_schema,test-font,renderer/r_font.c,$(TEST_CFLAGS) -ffunction-sections -fdata-sections,$(BIN_DIR)/test_font$(EXE_EXT),tests/test_runner.c tests/test_font.c shared/test.c,$(TEST_GC_SECTIONS) -lm $(LIBS),))
+test: test-font

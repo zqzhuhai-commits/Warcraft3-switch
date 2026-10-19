@@ -1,5 +1,5 @@
 {
-  "name": "openrealm",
+  "name": "warcraft3",
   "main_thread_stack_size": "0x400000",
   "main_thread_priority": 44,
   "default_cpu_id": 0,
