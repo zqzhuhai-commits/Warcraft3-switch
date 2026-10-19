@@ -16,14 +16,14 @@ jobs:
       - name: Verify staged artifacts
         working-directory: release-assets
         run: sha256sum --check SHA256SUMS
-      - name: Publish official 0.1.7 release
+      - name: Publish 0.1.8 gesture preview
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: v0.1.7
+          RELEASE_TAG: v0.1.8-preview
         run: |
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" release-assets/* --clobber
-            gh release edit "$RELEASE_TAG" --draft=false --prerelease=false --latest --title "魔兽争霸3冰封王座 Switch 0.1.7 正式版" --notes-file RELEASE.md
+            gh release edit "$RELEASE_TAG" --draft=false --prerelease=true --latest=false --title "魔兽争霸3冰封王座 Switch 0.1.8 双指手势测试版" --notes-file RELEASE.md
           else
-            gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --latest --title "魔兽争霸3冰封王座 Switch 0.1.7 正式版" --notes-file RELEASE.md release-assets/*
+            gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --prerelease --latest=false --title "魔兽争霸3冰封王座 Switch 0.1.8 双指手势测试版" --notes-file RELEASE.md release-assets/*
           fi

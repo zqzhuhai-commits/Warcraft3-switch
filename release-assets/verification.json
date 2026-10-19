@@ -1,20 +1,9 @@
 {
-  "nspSize": 7142616,
-  "sha256": "1c53a2d9973b9e2927f731271ec5467bb4afa4b85344ed0bfbacca0d4da2e7f4",
+  "nspSize": 7143640,
+  "sha256": "d745b5ea58968c13600ff0fe6595fa3a7a742c00f72ebe144b64286128472182",
   "containerEntries": [
     {
-      "file": "87c985d565d3ef153fa5f52c60625d1f.nca",
-      "size": 5595136,
-      "hashChecks": [
-        "Superblock Hash (GOOD)",
-        "Hash Table (GOOD)",
-        "Superblock Hash (GOOD)"
-      ],
-      "hashFailures": [],
-      "toolExit": 0
-    },
-    {
-      "file": "29243b405e00690e711941d56f868a10.cnmt.nca",
+      "file": "7bdbe8cc91c2169458656726b7368ac9.cnmt.nca",
       "size": 4096,
       "hashChecks": [
         "Superblock Hash (GOOD)",
@@ -24,9 +13,20 @@
       "toolExit": 0
     },
     {
-      "file": "977b16483013077cf98e67ca6c6f05b8.nca",
+      "file": "29e1598592d4fc6b30d8c855511fa1af.nca",
       "size": 1543168,
       "hashChecks": [
+        "Superblock Hash (GOOD)"
+      ],
+      "hashFailures": [],
+      "toolExit": 0
+    },
+    {
+      "file": "e3ca31b67411f810a44c858b129a0489.nca",
+      "size": 5596160,
+      "hashChecks": [
+        "Superblock Hash (GOOD)",
+        "Hash Table (GOOD)",
         "Superblock Hash (GOOD)"
       ],
       "hashFailures": [],
@@ -35,10 +35,10 @@
   ],
   "hardwareTested": false,
   "retailDataIncluded": false,
-  "version": "0.1.7",
+  "version": "0.1.8",
   "title": "魔兽争霸3冰封王座",
   "author": "小帆",
-  "contentVersion": 458752,
+  "contentVersion": 524288,
   "nsoHashChecks": [
     ".text   (GOOD)",
     ".rodata (GOOD)",
@@ -50,15 +50,15 @@
   "productionSourceMatchesBuild": true,
   "customBlackMapsReproduced": false,
   "regressions": {
-    "mapDirectionKeys": "engine K_* constants after SDL conversion",
-    "mapListDrag": "scroll, clamp, release outside, no accidental row click",
-    "homepageOverlay": "absent even when old version cvar is present"
+    "twoFingerCamera": "HID pair IDs -> SDL direct finger events -> coalesced pan and pinch",
+    "pinchZoom": "spread/squeeze, one zoom update per pass, stationary and menu gating",
+    "gestureCancellation": "pending click, selection and smart-order cancellation; all-lift gate; missing samples and explicit cancel"
   },
   "checks": {
     "switchCrossCompile": "passed",
     "menuDebug": "119 tests, 1586 assertions passed",
     "menuOptimized": "119 tests, 1586 assertions passed",
-    "sdlMenuNavigationRouting": "passed",
+    "touchPanPinchScheduler": "40 assertions passed in focused regression; full engine variants passed",
     "warcraftEngine": "8 variants, 703 tests per variant passed",
     "switchInputTouchKeyboard": "passed",
     "desktopWarcraftWowSc2Builds": "passed",

@@ -49,10 +49,15 @@ int main(void) {
     assert(buttons(SDL_MOUSEBUTTONDOWN,SDL_BUTTON_RIGHT)==1);
     assert(buttons(SDL_MOUSEBUTTONDOWN,SDL_BUTTON_LEFT)==0);clear();
     frame(0,0,0,950);drain();assert(buttons(SDL_MOUSEBUTTONUP,SDL_BUTTON_RIGHT)==1);clear();
-    /* Two fingers right-click once, retaining ownership until all lift. */
-    frame(2,400,200,1000);drain();assert(buttons(SDL_MOUSEBUTTONDOWN,SDL_BUTTON_RIGHT)==1);clear();
-    frame(1,400,200,1050);drain();assert(buttons(SDL_MOUSEBUTTONUP,SDL_BUTTON_RIGHT)==0);clear();
-    frame(0,0,0,1100);drain();assert(buttons(SDL_MOUSEBUTTONUP,SDL_BUTTON_RIGHT)==1);clear();
+    /* Two contacts become native finger events, never a mouse command. */
+    frame(2,400,200,1000);int n=drain();
+    assert(n==2 && queue[0].type==SDL_FINGERDOWN && queue[1].type==SDL_FINGERDOWN);
+    assert(queue[0].tfinger.fingerId==7 && queue[1].tfinger.fingerId==8);
+    assert(buttons(SDL_MOUSEBUTTONDOWN,SDL_BUTTON_RIGHT)==0);clear();
+    frame(1,400,200,1050);drain();
+    assert(queue[0].type==SDL_FINGERUP && queue[1].type==SDL_FINGERUP);clear();
+    frame(1,700,400,1075);assert(drain()==0);
+    frame(0,0,0,1100);assert(drain()==0);clear();
     /* Native SDL touch synthesis must not duplicate our events. */
     SDL_Event e={.type=SDL_FINGERDOWN};assert(SDL_PushEvent(&e)==0);
     e=(SDL_Event){.button={.type=SDL_MOUSEBUTTONDOWN,.which=SDL_TOUCH_MOUSEID}};
@@ -73,9 +78,22 @@ int main(void) {
     frame(2,300,200,1700);clear();
     test_touch.touches[0]=(HidTouchState){.finger_id=8,.x=900,.y=600};
     test_touch.touches[1]=(HidTouchState){.finger_id=7,.x=320,.y=220};
-    NX_TouchFrame(NULL,1750,640,360);drain();assert(queue[0].motion.x==160 && queue[0].motion.y==110);
-    clear();NX_TouchCancel();drain();assert(buttons(SDL_MOUSEBUTTONUP,SDL_BUTTON_RIGHT)==1);
-    clear();
+    NX_TouchFrame(NULL,1750,640,360);drain();
+    assert(queue[0].type==SDL_FINGERMOTION && queue[0].tfinger.fingerId==7);
+    assert(queue[0].tfinger.x==0.25f);
+    assert(queue[1].type==SDL_FINGERMOTION && queue[1].tfinger.fingerId==8);
+    clear();test_touch_available=false;NX_TouchFrame(NULL,1760,640,360);assert(drain()==0);
+    test_touch_available=true;NX_TouchCancel();drain();
+    assert(queue[0].type==SDL_FINGERUP && queue[1].type==SDL_FINGERUP);clear();
+    /* A second finger cancels a deferred tap and ends a live single-finger drag. */
+    frame(1,300,200,1800);frame(0,0,0,1820);clear();
+    frame(2,300,200,1840);drain();assert(buttons(SDL_MOUSEBUTTONDOWN,SDL_BUTTON_LEFT)==0);
+    clear();NX_TouchCancel();clear();
+    frame(1,100,100,1850);frame(1,200,200,1860);clear();
+    frame(2,200,200,1870);drain();
+    assert(queue[0].type==SDL_FINGERDOWN && queue[1].type==SDL_FINGERDOWN);
+    assert(buttons(SDL_MOUSEBUTTONUP,SDL_BUTTON_LEFT)==1);clear();
+    NX_TouchCancel();clear();
     frame(1,640,360,2000);clear();frame(0,0,0,2040);assert(drain()==0);
     frame(1,640,360,2120);clear();frame(0,0,0,2160);drain();
     assert(buttons(SDL_MOUSEBUTTONDOWN,SDL_BUTTON_LEFT)==0);
@@ -84,5 +102,5 @@ int main(void) {
     clear();frame(0,0,0,2500);assert(drain()==0);
     frame(1,640,360,2600);frame(0,0,0,2650);clear();NX_TouchCancel();
     frame(0,0,0,3000);assert(drain()==0);
-    SDL_Quit();puts("Switch touch integration: tap, drag, long press, two fingers, duplicate filtering, cancellation, shared buttons passed");
+    SDL_Quit();puts("Switch touch integration: tap, drag, long press, two-finger gestures, duplicate filtering, cancellation, shared buttons passed");
 }

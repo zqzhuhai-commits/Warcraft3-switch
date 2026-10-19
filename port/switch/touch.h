@@ -4,6 +4,7 @@
 #include <stdbool.h>
 /* Private ID is translated by our event filter into SDL_TOUCH_MOUSEID. */
 #define NX_TOUCH_MOUSEID 0x4e58544fu
+#define NX_TOUCH_DEVICE_ID ((SDL_TouchID)0x4e585447) // private direct-screen device; excludes duplicate SDL backend events
 void NX_InitInput(void);
 void NX_TouchFrame(SDL_Window *window, Uint32 now, int width, int height);
 void NX_TouchCancel(void);

@@ -1,5 +1,6 @@
 #ifdef __SWITCH__
 #include "port/switch/platform.h"
+#include "port/switch/touch.h"
 #endif
 #include "cl_input_local.h"
 #include "cl_control_groups.h"
@@ -20,6 +21,7 @@ static bool smart_click_active;
 static bool cam_west, cam_east, cam_north, cam_south;
 
 static void CL_ScrollFrame(void);
+static void CL_ZoomSteps(float steps, bool block_over_ui);
 static bool CL_MouseOverGameplayUIAt(int x, int y);
 
 static struct {
@@ -256,10 +258,14 @@ static struct {
     SDL_FingerID id[2];
     vec2_t pos[2];
     uint32_t count;
-    bool gesture;
+    bool gesture, zoom;
+    float span;
 } touch_pan;
 
 static bool CL_TouchIsDirect(SDL_TouchID touch) {
+#ifdef __SWITCH__
+    if (touch == NX_TOUCH_DEVICE_ID) return true;
+#endif
     return SDL_GetTouchDeviceType(touch) == SDL_TOUCH_DEVICE_DIRECT;
 }
 static bool (*touch_is_direct)(SDL_TouchID) = CL_TouchIsDirect;
@@ -269,12 +275,31 @@ static vec2_t CL_TouchPanCenter(void) {
                      (touch_pan.pos[0].y + touch_pan.pos[1].y) * 0.5f };
 }
 
+/* Normalize both axes so pinch speed is independent of viewport resolution. */
+static float CL_TouchSpan(void) {
+    size2_t win = re.GetWindowSize();
+    return hypotf((touch_pan.pos[1].x-touch_pan.pos[0].x)/MAX(1,win.width),
+                  (touch_pan.pos[1].y-touch_pan.pos[0].y)/MAX(1,win.height));
+}
+
+/* Coalesce both contacts before applying zoom; per-finger updates otherwise jitter while panning. */
+static void CL_FlushTouchZoom(void) {
+    if (!touch_pan.zoom) return;
+    touch_pan.zoom = false;
+    if (!touch_pan.gesture || touch_pan.count!=2 || !CL_GameplayInputReady()) return;
+    float span = CL_TouchSpan(), delta = span-touch_pan.span;
+    if (fabsf(delta)<0.002f) return; // normalized distance; accumulate small motion, suppress sampling jitter
+    CL_ZoomSteps(delta*20.0f, false); // zoom steps per viewport width; uses the existing camera zoom limits
+    touch_pan.span = span;
+}
+
 static void CL_TouchFingerEvent(SDL_TouchFingerEvent const *finger) {
     size2_t win = re.GetWindowSize();
     vec2_t pos = { finger->x * win.width, finger->y * win.height };
     int32_t slot = -1;
 
     if (!touch_is_direct(finger->touchId)) return;
+    input.touch_pointer = true; // A stationary touch must not trigger mouse-edge camera scrolling.
     FOR_LOOP(i, touch_pan.count) if (touch_pan.id[i] == finger->fingerId) slot = (int32_t)i;
     switch (finger->type) {
         case SDL_FINGERDOWN:
@@ -283,6 +308,8 @@ static void CL_TouchFingerEvent(SDL_TouchFingerEvent const *finger) {
             touch_pan.pos[touch_pan.count++] = pos;
             if (touch_pan.count == 2 && CL_GameplayInputReady()) {
                 touch_pan.gesture = true;
+                touch_pan.span = CL_TouchSpan(); touch_pan.zoom = false;
+                smart_click_active = false;
                 input.select = false;
                 cl.selection.in_progress = false;
                 CL_EndMinimapDrag();
@@ -294,6 +321,7 @@ static void CL_TouchFingerEvent(SDL_TouchFingerEvent const *finger) {
             if (slot < 0) return;
             touch_pan.pos[slot] = pos;
             if (touch_pan.gesture && touch_pan.count == 2) {
+                touch_pan.zoom = true;
                 vec2_t center = CL_TouchPanCenter();
                 CL_QueuePan(center.x, center.y);
             }
@@ -302,7 +330,7 @@ static void CL_TouchFingerEvent(SDL_TouchFingerEvent const *finger) {
             if (slot < 0) return;
             touch_pan.id[slot] = touch_pan.id[touch_pan.count - 1];
             touch_pan.pos[slot] = touch_pan.pos[touch_pan.count - 1];
-            if (--touch_pan.count < 2 && touch_pan.gesture) CL_EndPan();
+            if (--touch_pan.count < 2 && touch_pan.gesture) { CL_EndPan(); touch_pan.zoom = false; }
             if (!touch_pan.count) touch_pan.gesture = false;
             break;
     }
@@ -857,6 +885,7 @@ void CL_Input(void) {
         }
     }
     CL_FlushPan();
+    CL_FlushTouchZoom();
     if (hover_update_pending) CL_UpdateHover((float)hover_motion.x, (float)hover_motion.y);
     CL_InputFrame();
 }
@@ -2033,6 +2062,7 @@ TEST(client_input, two_finger_touch_pans_camera) {
     refExport_t old_re = re;
     __typeof__(input) old_input = input;
     mouseEvent_t old_mouse = mouse;
+    bool old_smart = smart_click_active;
     bool (*old_direct)(SDL_TouchID) = touch_is_direct;
     UINAME select_binding;
     float old_edge = Cvar_Value("cl_camera_edge_scroll", 0), old_speed = Cvar_Value("cl_camera_scroll_speed", 0);
@@ -2067,10 +2097,12 @@ TEST(client_input, two_finger_touch_pans_camera) {
     CL_Input(); Cbuf_Execute();
     T_ASSERT(input.select && !camera_drag.active);
 
-    /* Second finger: the selection is cancelled and the midpoint anchors a pan. */
+    /* Second finger: cancel selection and a pending long-press order before mouse-up. */
+    IN_SmartDown();T_ASSERT(smart_click_active);
     event = (SDL_Event){ .tfinger = { .type = SDL_FINGERDOWN, .touchId = 1, .fingerId = 2, .x = 0.6f, .y = 0.5f } };
     T_EQ(SDL_PushEvent(&event), 1); CL_Input(); Cbuf_Execute();
     T_ASSERT(!input.select && !cl.selection.in_progress && camera_drag.active);
+    T_ASSERT(!smart_click_active && input.touch_pointer);
 
     /* Both fingers report motion in one input pass (one event each per frame)
      * and drag the midpoint 102.4px right: the pan must apply once, since the
@@ -2086,6 +2118,39 @@ TEST(client_input, two_finger_touch_pans_camera) {
     T_EQ(CL_TestCountFocus(&cls.netchan.message, &focus), 1);
     vec2_t expected = CL_ClampCameraPosition((vec2_t){ 500 + 512 - 614.4f, 400 });
     T_FEQ(focus.focus.x, expected.x, 0.01f); T_FEQ(focus.focus.y, expected.y, 0.01f);
+
+    /* Spread/squeeze at a fixed midpoint zooms once per input pass, with inverse direction. */
+    float old_zoom = Cvar_Value("zoom_speed", 1);
+    Cvar_Set("zoom_speed", "100");
+    cl.viewDef.camerastate[0].distance = cl.viewDef.camerastate[1].distance = 1650;
+    SZ_Init(&cls.netchan.message, data, sizeof(data));
+    event = (SDL_Event){ .tfinger = { .type = SDL_FINGERMOTION, .touchId = 1, .fingerId = 1, .x = 0.45f, .y = 0.5f } };
+    T_EQ(SDL_PushEvent(&event), 1);
+    event = (SDL_Event){ .tfinger = { .type = SDL_FINGERMOTION, .touchId = 1, .fingerId = 2, .x = 0.75f, .y = 0.5f } };
+    T_EQ(SDL_PushEvent(&event), 1); CL_Input(); Cbuf_Execute();
+    T_FEQ(cl.viewDef.camerastate[0].distance, 1450, 0.01f);
+    uint32_t views=0;inputCmd_t gesture_cmd;
+    while(cls.netchan.message.readcount<cls.netchan.message.cursize) {
+        T_EQ(MSG_ReadByte(&cls.netchan.message),clc_input);
+        T_ASSERT(MSG_ReadInput(&cls.netchan.message,&gesture_cmd));
+        if(gesture_cmd.action==BZ_INPUT_VIEW)views++;
+    }
+    T_EQ(views,1);
+    /* A held pose must not keep zooming without new motion. */
+    CL_Input();T_FEQ(cl.viewDef.camerastate[0].distance, 1450, 0.01f);
+    event = (SDL_Event){ .tfinger = { .type = SDL_FINGERMOTION, .touchId = 1, .fingerId = 1, .x = 0.5f, .y = 0.5f } };
+    T_EQ(SDL_PushEvent(&event), 1);
+    event = (SDL_Event){ .tfinger = { .type = SDL_FINGERMOTION, .touchId = 1, .fingerId = 2, .x = 0.7f, .y = 0.5f } };
+    T_EQ(SDL_PushEvent(&event), 1); CL_Input(); Cbuf_Execute();
+    T_FEQ(cl.viewDef.camerastate[0].distance, 1650, 0.01f);
+    /* A modal/menu input owner blocks pinch and discards its pending zoom. */
+    cls.key_dest=key_menu;
+    event = (SDL_Event){ .tfinger = { .type = SDL_FINGERMOTION, .touchId = 1, .fingerId = 2, .x = 0.9f, .y = 0.5f } };
+    T_EQ(SDL_PushEvent(&event), 1);CL_Input();
+    T_FEQ(cl.viewDef.camerastate[0].distance, 1650, 0.01f);
+    cls.key_dest=key_game;CL_Input();
+    T_FEQ(cl.viewDef.camerastate[0].distance, 1650, 0.01f);
+    Cvar_SetValue("zoom_speed", old_zoom);
 
     /* Lifting ends the pan without turning the first touch into a click. */
     SZ_Init(&cls.netchan.message, data, sizeof(data));
@@ -2111,6 +2176,7 @@ TEST(client_input, two_finger_touch_pans_camera) {
     }
 
     cl = *old_cl; MemFree(old_cl); cls = old_cls; re = old_re; input = old_input; mouse = old_mouse;
+    smart_click_active = old_smart;
     touch_is_direct = old_direct; memset(&touch_pan, 0, sizeof(touch_pan)); pan_motion.pending = false;
     FOR_LOOP(i, MAX_LAYOUT_LAYERS) SCR_SetLayoutLayer(i, cl.layout[i]);
     Key_SetBinding(K_MOUSE1, 0, select_binding);

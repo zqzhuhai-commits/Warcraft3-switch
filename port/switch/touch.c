@@ -14,11 +14,17 @@ static struct {
     Uint32 started;
 } touch;
 static struct {bool active;int x,y;Uint32 deadline;} pending;
+static struct {
+    bool blocked, active;
+    unsigned id[2];
+    float x[2], y[2];
+} gesture;
 
-/* Do not let SDL's backend synthesize a second click or two-finger camera pan. */
+/* Only our sampled contacts may enter the engine; discard duplicate backend synthesis. */
 static int NX_FilterTouch(void *unused, SDL_Event *ev) {
     (void)unused;
-    if (ev->type==SDL_FINGERDOWN || ev->type==SDL_FINGERMOTION || ev->type==SDL_FINGERUP) return 0;
+    if (ev->type==SDL_FINGERDOWN || ev->type==SDL_FINGERMOTION || ev->type==SDL_FINGERUP)
+        return ev->tfinger.touchId==NX_TOUCH_DEVICE_ID;
     Uint32 *which=NULL;
     if(ev->type==SDL_MOUSEMOTION) which=&ev->motion.which;
     if(ev->type==SDL_MOUSEBUTTONDOWN || ev->type==SDL_MOUSEBUTTONUP) which=&ev->button.which;
@@ -46,9 +52,57 @@ static void NX_TouchMotion(SDL_Window *win,int x,int y) {
     NX_TouchPointer(x,y);
 }
 
+/* The client consumes normalized finger events through its existing camera-input path. */
+static void NX_Finger(unsigned i,Uint32 type,SDL_Window *win,Uint32 now) {
+    SDL_Event ev={0};ev.type=type;
+    ev.tfinger=(SDL_TouchFingerEvent){.type=type,.timestamp=now,.touchId=NX_TOUCH_DEVICE_ID,
+        .fingerId=gesture.id[i],.x=gesture.x[i],.y=gesture.y[i],.pressure=type==SDL_FINGERUP ? 0 : 1,
+        .windowID=win ? SDL_GetWindowID(win) : 0};
+    SDL_PushEvent(&ev);
+}
+
+static void NX_EndGesture(SDL_Window *win,Uint32 now) {
+    if(gesture.active)for(unsigned i=0;i<2;i++)NX_Finger(i,SDL_FINGERUP,win,now);
+    gesture.active=false;
+}
+
 void NX_TouchCancel(void) {
+    NX_EndGesture(NULL,SDL_GetTicks());
     if(touch.button) NX_MouseSource(1,touch.button,false,touch.x,touch.y);
-    touch.active=false;touch.button=0;pending.active=false;
+    touch.active=false;touch.button=0;pending.active=false;gesture.blocked=false;
+}
+
+/* Keep the original pair across HID array reordering and ignore extra contacts.
+ * After either contact lifts, consume remaining fingers until the screen is clear. */
+static bool NX_MultiTouch(HidTouchScreenState const *sample,SDL_Window *win,Uint32 now) {
+    if(!gesture.blocked && sample->count<2)return false;
+    if(!gesture.blocked) {
+        gesture.blocked=gesture.active=true;pending.active=false;
+        for(unsigned i=0;i<2;i++) {
+            gesture.id[i]=sample->touches[i].finger_id;
+            gesture.x[i]=SDL_clamp(sample->touches[i].x/1280.0f,0,1);
+            gesture.y[i]=SDL_clamp(sample->touches[i].y/720.0f,0,1);
+            NX_Finger(i,SDL_FINGERDOWN,win,now);
+        }
+        /* Finger-down must cancel the engine selection before releasing a held mouse button. */
+        if(touch.button)NX_MouseSource(1,touch.button,false,touch.x,touch.y);
+        touch.active=false;touch.button=0;touch.second=false;
+        return true;
+    }
+    if(gesture.active) {
+        int slots[2]={-1,-1};
+        for(int k=0;k<sample->count && k<16;k++)for(unsigned i=0;i<2;i++)
+            if(sample->touches[k].finger_id==gesture.id[i])slots[i]=k;
+        if(slots[0]<0 || slots[1]<0)NX_EndGesture(win,now);
+        else for(unsigned i=0;i<2;i++) {
+            HidTouchState const *finger=&sample->touches[slots[i]];
+            float x=SDL_clamp(finger->x/1280.0f,0,1), y=SDL_clamp(finger->y/720.0f,0,1);
+            if(x==gesture.x[i] && y==gesture.y[i])continue;
+            gesture.x[i]=x;gesture.y[i]=y;NX_Finger(i,SDL_FINGERMOTION,win,now);
+        }
+    }
+    if(sample->count==0)gesture.blocked=false;
+    return true;
 }
 
 static void NX_TouchClick(int button,int x,int y) {
@@ -64,9 +118,11 @@ void NX_TouchFrame(SDL_Window *win,Uint32 now,int w,int h) {
     SDL_EventFilter filter;void *userdata;
     if(!SDL_GetEventFilter(&filter,&userdata) || filter!=NX_FilterTouch)
         SDL_SetEventFilter(NX_FilterTouch,NULL);
-    if(pending.active && !touch.active && (Sint32)(now-pending.deadline)>=0)NX_FlushTap();
     HidTouchScreenState sample;
-    if(!hidGetTouchScreenStates(&sample,1) || w<=0 || h<=0) return;
+    bool available=hidGetTouchScreenStates(&sample,1)!=0;
+    if(available && NX_MultiTouch(&sample,win,now))return;
+    if(pending.active && !touch.active && (Sint32)(now-pending.deadline)>=0)NX_FlushTap();
+    if(!available || w<=0 || h<=0)return;
     if(sample.count<=0) {
         if(touch.active) {
             if(touch.button)NX_MouseSource(1,touch.button,false,touch.x,touch.y);
@@ -93,7 +149,7 @@ void NX_TouchFrame(SDL_Window *win,Uint32 now,int w,int h) {
     }
     int dx=x-touch.start_x,dy=y-touch.start_y;
     if(!touch.button) {
-        if(sample.count>=2 || (now-touch.started>=NX_RIGHT_DELAY && dx*dx+dy*dy<=NX_TAP_SLOP*NX_TAP_SLOP)) {
+        if(now-touch.started>=NX_RIGHT_DELAY && dx*dx+dy*dy<=NX_TAP_SLOP*NX_TAP_SLOP) {
             pending.active=false;
             touch.button=SDL_BUTTON_RIGHT;
             NX_MouseSource(1,touch.button,true,x,y);

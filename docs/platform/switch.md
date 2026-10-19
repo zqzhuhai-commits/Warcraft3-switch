@@ -10,9 +10,9 @@ These are display metadata; the upstream MIT attribution remains in source.
 Package files use `魔兽争霸3冰封王座-Switch-<version>.nsp` / `.nro`.
 The internal NPDM process name is `warcraft3`.
 For versioned replacement, run `python3 port/switch/patch-hacbrewpack.py /path/to/hacBrewPack`
-and rebuild that tool. `package.py` sets `HACBREWPACK_TITLE_VERSION=458752`
-(application version 7; earlier preview packages used CNMT version 0).
-The NACP display version is 0.1.7. Existing folders created by the system or
+and rebuild that tool. `package.py` sets `HACBREWPACK_TITLE_VERSION=524288`
+(application version 8; earlier preview packages used CNMT version 0).
+The NACP display version is 0.1.8. Existing folders created by the system or
 other file managers are not automatically renamed by changing the NACP.
 The build fills all 16 NACP language records and enables their language mask,
 because older nacptool versions initialize only 12 records.
@@ -94,7 +94,8 @@ single-player; network availability is not certified by this port.
 | D-pad left/right | Subgroup / quick camera |
 | Left stick click / right stick click | Quick save / engine screenshot |
 | Touch tap / one-finger slide | Left click / left-button drag |
-| Stationary hold 500 ms / two-finger touch | Right click / smart order |
+| Stationary hold 500 ms | Right click / smart order |
+| Two-finger drag / spread / squeeze | Camera pan / zoom in / zoom out |
 
 A and ZR are merged into one logical left button, so releasing one while the
 other is held does not end a drag. Stick camera keys emit transitions only,
@@ -116,19 +117,20 @@ sh port/switch/tests/run-input.sh
 `touch.c` explicitly initializes and samples libnx touchscreen HID: the original
 pad-only port relied on SDL synthesis, which failed on the user's console.
 Screen coordinates (1280x720) scale into the SDL window and clamp to its bounds.
-A tap defers left down/up until release; movement over 8 logical pixels starts a
-left drag at the original point. A stationary 500 ms hold or second finger starts
-right down without first issuing a left click. Right ownership lasts until all
-fingers lift. Finger IDs survive sample-array reorder. Missing samples retain
-state; a zero-contact sample or loss of the focused window releases held touch
-buttons. Touch and pad buttons share ownership, preventing premature releases.
+A tap waits for the double-tap window before left down/up; movement over 8
+logical pixels starts a left drag at the original point. A stationary 500 ms
+hold starts right down without first issuing a left click. A second finger now
+switches to native camera gestures (0.1.8) rather than right-click. Finger IDs
+survive sample-array reorder. Missing samples retain state; loss of the focused
+window releases held touch buttons and contacts. Touch and pad mouse buttons
+share ownership, preventing premature releases.
 
-The adapter disables SDL touch/mouse synthesis and filters raw finger/native
-synthetic mouse events, then marks its own mouse events as SDL_TOUCH_MOUSEID.
-This avoids duplicate clicks and the client's unrelated two-finger camera-pan
-path, and disables edge scrolling under a resting finger. The adapter also
-hands the last touch position to the stick cursor. No gameplay logic or shared
-client touch behavior changes.
+The adapter disables SDL touch/mouse synthesis and filters backend finger/native
+synthetic mouse events. Its own mouse events become SDL_TOUCH_MOUSEID, and its
+paired finger events use NX_TOUCH_DEVICE_ID. The client consumes the pair through
+the generic pan/pinch path. A resting touch pointer does not edge-scroll. The
+adapter also hands the last single-touch position to the stick cursor. No game
+simulation, network or save contract changes are needed.
 
 These tests do not emulate Horizon, graphics or physical touchscreen hardware;
 the new build still needs a console retest.
@@ -268,3 +270,34 @@ staged checksums, publishes a non-prerelease and marks it latest. The previous
 preview release remains accessible. Publication status does not expand tested
 map/script compatibility; `verification.json` retains its original evidence.
 Update the workflow's release tag/title when publishing a future version.
+
+
+## 0.1.8 two-finger camera gestures
+
+Switch HID sampling now emits private-device SDL finger events for a pair of
+contacts instead of translating two touches into right-click. The SDL filter
+accepts `NX_TOUCH_DEVICE_ID` only, avoiding duplicate backend touch events. The
+client recognizes that ID as a direct screen; ordinary indirect trackpads stay
+excluded. Pair IDs remain stable when HID array order changes. Extra fingers
+are ignored; once either tracked contact lifts, all remaining touches are
+consumed until the screen is clear. Missing HID samples retain ownership.
+
+Finger-down events precede releasing a single-finger mouse drag so the client
+cancels pending selection and smart orders first. Deferred single taps are
+cancelled when a pair starts. Cancel/focus loss sends finger-ups, and no delayed
+single click is emitted when returning to one finger. Single-finger taps,
+double-tap right-click, long-press right-click and map-list drags remain available.
+
+The client reuses its existing two-finger centroid pan. Pinch span is measured
+in normalized viewport coordinates and applied once after draining both contacts
+per frame, through `CL_ZoomSteps`, using the existing zoom speed and game-owned
+camera policy. A 0.002 normalized span deadband accumulates small changes; 20
+zoom steps per unit span sets sensitivity. Stationary contacts do not repeat
+zoom. Menu/modal/loading input gating blocks gameplay gestures. No network or
+save contract changes were introduced.
+
+Regression coverage: production HID adapter + SDL queue for reordered IDs,
+partial/all lift, pending tap cancellation, drag-release ordering, missing samples
+and explicit cancel; client SDL queue + input scheduler for pan, pinch in/out,
+stationary pose, input-owner gating and selection/order cancellation. Device
+feel and GPU performance still require hardware testing.
