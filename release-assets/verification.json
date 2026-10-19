@@ -1,10 +1,10 @@
 {
-  "nspSize": 7135448,
-  "sha256": "f3a5482f0b2cb3c7e1cd06949963f1d41b1bcfca0d39959c30410ec623b833d3",
+  "nspSize": 7136472,
+  "sha256": "3b4a25dad31fb24af5dbcccfa250700f64216c2327f26334833acc0e2073c6a4",
   "containerEntries": [
     {
-      "file": "364c14b057563f793635876f76ddebf6.nca",
-      "size": 5587968,
+      "file": "dcec365ffe926799cdfe95023d262c38.nca",
+      "size": 5588992,
       "hashChecks": [
         "Superblock Hash (GOOD)",
         "Hash Table (GOOD)",
@@ -14,20 +14,20 @@
       "toolExit": 0
     },
     {
-      "file": "eb96f5081c474d0a64c3e38c947afc12.cnmt.nca",
-      "size": 4096,
+      "file": "12e5604b7a18c4a690db0ba00cf1f79d.nca",
+      "size": 1543168,
       "hashChecks": [
-        "Superblock Hash (GOOD)",
-        "Hash Table (GOOD)"
+        "Superblock Hash (GOOD)"
       ],
       "hashFailures": [],
       "toolExit": 0
     },
     {
-      "file": "a7fc18804fc00a06d1fd5ad6770da641.nca",
-      "size": 1543168,
+      "file": "670d6b9507db9c8b881d6b81fba21e2f.cnmt.nca",
+      "size": 4096,
       "hashChecks": [
-        "Superblock Hash (GOOD)"
+        "Superblock Hash (GOOD)",
+        "Hash Table (GOOD)"
       ],
       "hashFailures": [],
       "toolExit": 0
@@ -37,9 +37,8 @@
   "retailDataIncluded": false,
   "displayName": "魔兽争霸3冰封王座",
   "author": "小帆",
-  "version": "0.1.4",
-  "applicationContentVersion": 262144,
-  "internalProcessName": "warcraft3",
+  "version": "0.1.5",
+  "applicationContentVersion": 327680,
   "verifiedLanguageRecords": 16,
   "nroMetadataMatchesNsp": true,
   "sdRoot": "sdmc:/switch/warcraft3",
@@ -49,17 +48,10 @@
     ".rodata (GOOD):             00635000-00819000",
     ".rwdata (GOOD):             00819000-008b4338"
   ],
-  "nativeSuite": {
-    "tests": 6952,
-    "assertions": 343274,
-    "failures": 0,
-    "errors": 0
-  },
-  "nativeSuiteReports": 34,
-  "fontTestsDebugAndRelease": "3 tests, 43 assertions passed in each mode; production font layout with synthetic metrics",
-  "hostGameBuilds": [
-    "warcraft-3",
-    "world-of-warcraft",
-    "starcraft-2"
-  ]
+  "keyboardAdapterTests": "silent repeated activation, focus backend hook, explicit dialog, UTF-8 chunking, cancellation, failure cleanup, chord edge/Plus binding suppression",
+  "keyboardShortcut": "Hold L then press Plus after focusing a text field",
+  "touchAdapterTests": "passed",
+  "controllerAdapterAssertions": 18,
+  "engineTextInputCall": "NX_StartTextInput",
+  "linkedBackendWrapper": "__wrap_SWITCH_StartTextInput"
 }

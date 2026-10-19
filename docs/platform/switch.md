@@ -10,9 +10,9 @@ These are display metadata; the upstream MIT attribution remains in source.
 Package files use `魔兽争霸3冰封王座-Switch-<version>.nsp` / `.nro`.
 The internal NPDM process name is `warcraft3`.
 For versioned replacement, run `python3 port/switch/patch-hacbrewpack.py /path/to/hacBrewPack`
-and rebuild that tool. `package.py` sets `HACBREWPACK_TITLE_VERSION=262144`
-(application version 4; earlier preview packages used CNMT version 0).
-The NACP display version is 0.1.4. Existing folders created by the system or
+and rebuild that tool. `package.py` sets `HACBREWPACK_TITLE_VERSION=327680`
+(application version 5; earlier preview packages used CNMT version 0).
+The NACP display version is 0.1.5. Existing folders created by the system or
 other file managers are not automatically renamed by changing the NACP.
 The build fills all 16 NACP language records and enables their language mask,
 because older nacptool versions initialize only 12 records.
@@ -160,3 +160,32 @@ this new layout's hardware appearance.
 Release attachments use an ASCII ZIP name because GitHub rewrites non-ASCII
 asset names. UTF-8 entry names preserve the requested Chinese NSP/NRO filenames.
 The ZIP contains its own SHA256SUMS; the outer manifest checks ZIP and report.
+
+## Explicit Switch keyboard
+
+The universal client enables SDL text events when entering main-menu mode
+(`CL_SetMenuBindings`). The devkitPro SDL 2.28 Switch backend creates/shows its
+inline keyboard directly in its `StartTextInput` hook, even if the generic
+`SDL_ENABLE_SCREEN_KEYBOARD` hint is disabled. This caused the first-launch
+keyboard dialog. Suppressing it after the first input frame would be too late.
+
+Only the Switch engine compilation maps `SDL_StartTextInput` to
+`NX_StartTextInput`, which enables SDL text/editing events without invoking the
+backend's inline keyboard hook. The link also wraps the SDL Switch driver's `SWITCH_StartTextInput` hook with
+a no-op, since SDL invokes that hook directly on window focus regain. This
+prevents the same automatic dialog after a focus transition. The callback is
+an external symbol in the pinned devkitPro SDL 2.28 backend; verify the wrapper
+still links if changing SDL SDK versions. Desktop and other targets keep normal
+SDL IME behavior. The Switch platform offers a deliberate L + Plus chord instead:
+select the target edit field, hold L, then press Plus. It opens a native libnx
+keyboard only while SDL text entry is active. The Plus menu binding is consumed
+for this chord. Native completion sends SDL_TEXTINPUT chunks at UTF-8 codepoint
+boundaries (31 bytes maximum per event); cancellation sends nothing.
+
+`sh port/switch/tests/run-input.sh` covers silent/repeated text activation,
+explicit native dialog, UTF-8 chunk delivery, cancellation/failure cleanup,
+one dialog per held chord, and suppression of the normal Plus menu press.
+Tests use a simulated keyboard service, not a physical console.
+
+Backend reference: `devkitPro/SDL`, branch `switch-sdl-2.28`,
+`src/video/switch/SDL_switchswkb.c` and `src/video/SDL_video.c`.

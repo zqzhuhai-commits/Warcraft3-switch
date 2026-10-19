@@ -55,7 +55,7 @@ for name,files in modules.items():
  if name in ('game','menu','engine'):extra+=['-DSTB_FDF_IMPLEMENTATION','-DSTB_FDF_GLOBALS']
  if name=='engine':
   extra+=['-DBZ_CLIENT_WORLD']
-  if not a.host:extra+=['-Dmain=OpenRealm_Main']
+  if not a.host:extra+=['-Dmain=OpenRealm_Main','-DSDL_StartTextInput=NX_StartTextInput']
  if name in ('game','menu'):extra+=['-include','port/web/src/web_fdf_namespace.h','-DBZ_WEB_FDF_'+name.upper()]
  if name=='renderer':extra+=['-include','port/web/src/web_renderer_namespace.h']
  objects.append(compile(name,files,extra))
@@ -65,15 +65,16 @@ if a.host:
 else:
  # Isolate libnx headers from the engine's legacy aliases.
  objects.append(compile('platform',[ROOT/'port/switch/platform.c']))
+ objects.append(compile('keyboard',[ROOT/'port/switch/keyboard.c']))
  objects.append(compile('touch',[ROOT/'port/switch/touch.c']))
  objects.append(compile('filesystem',[ROOT/'port/switch/fs.c']))
  run([cc,'-fPIE','-specs='+str(dkp/'libnx/switch.specs'),'-march=armv8-a+crc+crypto','-mtp=soft',*objects,
-  '-Wl,--gc-sections','-Wl,-Map,'+str(out/'openrealm.map'),
+  '-Wl,--gc-sections','-Wl,--wrap=SWITCH_StartTextInput','-Wl,-Map,'+str(out/'openrealm.map'),
   '-L'+str(dkp/'portlibs/switch/lib'),'-L'+str(dkp/'libnx/lib'),'-lSDL2','-lGLESv2','-lEGL','-lglapi','-ldrm_nouveau','-lstdc++','-lnx','-lz','-lm','-o',out/'openrealm.elf'])
  tools=dkp/'tools/bin'
  romfs=out/'romfs';shutil.copytree(ROOT/'share',romfs/'share',dirs_exist_ok=True)
  shutil.copytree(ROOT/wc3/'share',romfs/'share/warcraft-3',dirs_exist_ok=True)
- run([tools/'nacptool','--create','魔兽争霸3冰封王座','小帆','0.1.4',out/'control.nacp','--titleid=0100F34C524D0000'])
+ run([tools/'nacptool','--create','魔兽争霸3冰封王座','小帆','0.1.5',out/'control.nacp','--titleid=0100F34C524D0000'])
  # Older nacptool versions fill only the first 12 language records.
  nacp=out/'control.nacp';metadata=bytearray(nacp.read_bytes())
  for language in range(16):metadata[language*0x300:(language+1)*0x300]=metadata[:0x300]

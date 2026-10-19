@@ -26,6 +26,7 @@ void NX_TouchPointer(int x,int y) {
 }
 static Uint32 previous;
 static u64 last_buttons;
+static bool keyboard_chord;
 static bool cam_keys[4];
 extern int OpenRealm_Main(int argc, char **argv);
 
@@ -67,7 +68,12 @@ void NX_PumpInput(void) {
         SDL_Event ev = {.type = SDL_QUIT}; SDL_PushEvent(&ev); return;
     }
     padUpdate(&pad);
-    u64 held = padGetButtons(&pad), changed = held ^ last_buttons;
+    u64 held = padGetButtons(&pad);
+    bool chord=(held & (HidNpadButton_L|HidNpadButton_Plus))==(HidNpadButton_L|HidNpadButton_Plus);
+    if(chord && !keyboard_chord) NX_ShowKeyboard();
+    keyboard_chord=chord;
+    if(chord) held &= ~HidNpadButton_Plus;
+    u64 changed=held ^ last_buttons;
     SDL_Keymod mods = (held & HidNpadButton_ZL) ? KMOD_LSHIFT : KMOD_NONE;
     SDL_SetModState(mods);
     HidAnalogStickState left = padGetStickPos(&pad, 0), right = padGetStickPos(&pad, 1);

@@ -30,6 +30,11 @@ int main(void) {
     test_sticks[1].x=0;NX_PumpInput();assert(events(SDL_KEYUP,SDLK_RIGHT)==1);
     test_buttons=HidNpadButton_Plus;NX_PumpInput();assert(events(SDL_KEYDOWN,SDLK_F10)==1);
     test_buttons=0;NX_PumpInput();assert(events(SDL_KEYUP,SDLK_F10)==1);
+    NX_StartTextInput();
+    test_buttons=HidNpadButton_L|HidNpadButton_Plus;NX_PumpInput();
+    assert(test_keyboard_shows==1);assert(events(SDL_KEYDOWN,SDLK_F10)==0);
+    NX_PumpInput();assert(test_keyboard_shows==1);
+    test_buttons=0;NX_PumpInput();assert(events(SDL_KEYUP,SDLK_F10)==0);
     test_running=false;NX_PumpInput();assert(events(SDL_QUIT,0)==1);
-    SDL_Quit();puts("Switch input integration: 14 assertions passed");
+    SDL_Quit();puts("Switch input integration: 18 assertions passed");
 }

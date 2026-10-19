@@ -2,6 +2,7 @@
 #define TEST_SWITCH_H
 #include <stdint.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdbool.h>
 typedef uint64_t u64;
 typedef struct { unsigned finger_id,x,y; } HidTouchState;
@@ -36,5 +37,14 @@ static inline void randomGet(void *p,size_t n){(void)p;(void)n;}
 static inline void consoleInit(void *p){(void)p;}
 static inline void consoleExit(void *p){(void)p;}
 static inline void consoleUpdate(void *p){(void)p;}
+typedef int Result;
+typedef struct {int unused;} SwkbdConfig;
+extern int test_keyboard_shows,test_keyboard_closes,test_keyboard_create_result,test_keyboard_show_result;
+extern char const *test_keyboard_text;
+static inline Result swkbdCreate(SwkbdConfig *p,size_t n){(void)p;(void)n;return test_keyboard_create_result;}
+static inline void swkbdConfigMakePresetDefault(SwkbdConfig *p){(void)p;}
+static inline void swkbdConfigSetStringLenMax(SwkbdConfig *p,unsigned n){(void)p;(void)n;}
+static inline Result swkbdShow(SwkbdConfig *p,char *s,size_t n){(void)p;test_keyboard_shows++;snprintf(s,n,"%s",test_keyboard_text);return test_keyboard_show_result;}
+static inline void swkbdClose(SwkbdConfig *p){(void)p;test_keyboard_closes++;}
 #define R_FAILED(x) ((x)!=0)
 #endif

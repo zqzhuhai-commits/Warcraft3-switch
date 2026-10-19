@@ -12,7 +12,7 @@
 ## 下载与安装
 
 从本仓库的 [Releases](https://github.com/zqzhuhai-commits/Warcraft3-switch/releases)
-下载 `Warcraft3-Switch-0.1.4.zip`，解压得到 `魔兽争霸3冰封王座-Switch-0.1.4.nsp`。这是包含原生引擎的完整应用包，不是 NRO 前端。
+下载 `Warcraft3-Switch-0.1.5.zip`，解压得到 `魔兽争霸3冰封王座-Switch-0.1.5.nsp`。这是包含原生引擎的完整应用包，不是 NRO 前端。
 也提供 NRO 作为备用运行方式；NRO 需使用完整应用内存模式，不支持相册 Applet 模式。
 
 1. 将你拥有的 **Warcraft III Classic 的 MPQ 文件**放到 SD 卡目录：
@@ -38,6 +38,7 @@
 | B | 取消 / Escape |
 | X / Y | 第一个英雄 / 空闲工人 |
 | ＋ / － | 游戏菜单 / 任务 |
+| 按住 L 再按 ＋ | 手动调出虚拟键盘（先选中文字输入框） |
 | 十字键上 / 下 | 缩放 |
 | 十字键左 / 右 | 切换子组 / 快速镜头 |
 | 按下左 / 右摇杆 | 快速保存 / 截图 |
