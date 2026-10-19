@@ -12,7 +12,7 @@
 ## 下载与安装
 
 从本仓库的 [Releases](https://github.com/zqzhuhai-commits/Warcraft3-switch/releases)
-下载 `魔兽争霸3冰封王座-Switch-0.1.4.nsp`。这是包含原生引擎的完整应用包，不是 NRO 前端。
+下载 `Warcraft3-Switch-0.1.4.zip`，解压得到 `魔兽争霸3冰封王座-Switch-0.1.4.nsp`。这是包含原生引擎的完整应用包，不是 NRO 前端。
 也提供 NRO 作为备用运行方式；NRO 需使用完整应用内存模式，不支持相册 Applet 模式。
 
 1. 将你拥有的 **Warcraft III Classic 的 MPQ 文件**放到 SD 卡目录：

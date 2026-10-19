@@ -19,4 +19,12 @@ jobs:
       - name: Publish experimental build
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create v0.1.4-preview --target "$GITHUB_SHA" --prerelease --title "魔兽争霸3冰封王座 Switch 0.1.4" --notes-file RELEASE.md release-assets/*
+        run: |
+          if gh release view v0.1.4-preview >/dev/null 2>&1; then
+            gh release upload v0.1.4-preview release-assets/* --clobber
+            gh release edit v0.1.4-preview --notes-file RELEASE.md
+            gh release delete-asset v0.1.4-preview '3.-Switch-0.1.4.nsp' --yes || true
+            gh release delete-asset v0.1.4-preview '3.-Switch-0.1.4.nro' --yes || true
+          else
+            gh release create v0.1.4-preview --target "$GITHUB_SHA" --prerelease --title "魔兽争霸3冰封王座 Switch 0.1.4" --notes-file RELEASE.md release-assets/*
+          fi

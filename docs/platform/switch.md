@@ -156,3 +156,7 @@ and checks measured height and submitted glyph positions, without a GPU or
 retail font. It covers color controls, explicit newlines and disabled wrapping.
 The user's screenshots establish real map rendering, but do not establish
 this new layout's hardware appearance.
+
+Release attachments use an ASCII ZIP name because GitHub rewrites non-ASCII
+asset names. UTF-8 entry names preserve the requested Chinese NSP/NRO filenames.
+The ZIP contains its own SHA256SUMS; the outer manifest checks ZIP and report.
